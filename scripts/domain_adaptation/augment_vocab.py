@@ -1,6 +1,7 @@
-"""BERT Tokenizer update functionality."""
+"""BERT vocabulary update functionality."""
 import logging
 import argparse
+from pathlib import Path
 from typing import List, Union
 
 import nltk
@@ -239,6 +240,7 @@ def create_updated_vocab_txt(top_terms: List[str],
             vocab[i] = mapping[ori_term]
 
     # Saves vocab
+    Path(updated_vocab_path).parent.mkdir(exist_ok=True, parents=True)
     with open(updated_vocab_path, 'w+') as f:
         f.write('\n'.join(vocab))
     logger.info(f'Updated vocabulary saved at {updated_vocab_path}')
