@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tokenizers import BertWordPieceTokenizer
 
 
-logger = logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def parse_args():
@@ -66,12 +66,12 @@ def train_tokenizer(corpus: Union[str, List[str]],
 
     tokenizer = BertWordPieceTokenizer(lowercase=lowercase)
 
-    logging.info('Training new WordPiece tokenizer on in-domain corpora...')
+    logger.info('Training new WordPiece tokenizer on in-domain corpora...')
     tokenizer.train(corpus, vocab_size=vocab_size)
 
     if save_vocab:
         tokenizer.save('.', in_domain_vocab.rsplit('-', 1)[0])
-        logging.info(f'Saved trained tokenizer to {in_domain_vocab}')
+        logger.info(f'Saved trained tokenizer to {in_domain_vocab}')
     return tokenizer
 
 
@@ -103,7 +103,7 @@ def tokenize(texts: List[str],
         raise AttributeError(f'Provided `tokenizer` is not from `tokenizers` '
                              'library.')
 
-    logging.info('Tokenizing texts...')
+    logger.info('Tokenizing texts...')
     if flat_map:
         tokenized = [t for enc in tokenizer.encode_batch(texts)
                        for t in enc.tokens]
@@ -140,7 +140,7 @@ def rank_tokens(tokenized_docs: List[List[str]],
         raise ValueError(f'Invalid mode {mode} provided. '
                          f'Expecting value from {MODES}.')
 
-    logging.info(f'Ranking tokens by {mode}...')
+    logger.info(f'Ranking tokens by {mode}...')
     if mode == 'count':
         return _rank_tokens_by_count(tokenized_docs)
     else:
@@ -213,7 +213,7 @@ def create_updated_vocab_txt(top_terms: List[str],
         ori_vocab_path {str} -- Path to existing vocabulary txt file
         updated_vocab_path {str} -- Path to save updated vocabulary txt file
     """
-    logging.info('Updating vocabulary...')
+    logger.info('Updating vocabulary...')
     # Get stop words
     stopwords = _get_stop_words() + ["[CLS]", "[SEP]"]
 
@@ -241,14 +241,15 @@ def create_updated_vocab_txt(top_terms: List[str],
     # Saves vocab
     with open(updated_vocab_path, 'w+') as f:
         f.write('\n'.join(vocab))
-    logging.info(f'Updated vocabulary saved at {updated_vocab_path}')
+    logger.info(f'Updated vocabulary saved at {updated_vocab_path}')
 
 
 if __name__ == '__main__':
     args = parse_args()
 
+    logging.basicConfig(level=logging.INFO)
+
     # Train and save in-domain corpora as text file
-    logging.info('\n')
     tokenizer = train_tokenizer(args.corpus, lowercase=args.lowercase)
 
     # Load corpus / corpora
