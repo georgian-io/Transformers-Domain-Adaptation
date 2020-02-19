@@ -4,3 +4,11 @@
 
 *.txt
 !requirements*.txt
+
+# Training output files
+*.json
+*.bin
+
+
+# Events files generated from training
+events*
