@@ -9,7 +9,7 @@ IFS="="  # Change the internal field separator
 while [ $# -gt 0 ]; do
     ARG1="$1"
     EXTRA_SHIFT="TRUE"  # Performs double shifts of args
-    if grep -q  $IFS <<< $ARG1; then
+    if grep -q $IFS <<< $ARG1; then
         read -r ARG1 ARG2 <<< $ARG1
         EXTRA_SHIFT="FALSE"  # Perform only single shift of args
     elif [ $# -gt 1 ]; then
@@ -17,6 +17,11 @@ while [ $# -gt 0 ]; do
     fi
 
     case $ARG1 in
+        -o|--output-dir)
+        OUTPUT_DIR="$ARG2"
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
         --corpus)
         CORPUS="$ARG2"
         shift;
@@ -27,8 +32,8 @@ while [ $# -gt 0 ]; do
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
-        -o|--output-dir)
-        OUTPUT_DIR="$ARG2"
+        --fine-tune-text)
+        FINE_TUNE_TEXT="$ARG2"
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
@@ -80,34 +85,48 @@ while [ $# -gt 0 ]; do
 done
 set -- "${POSITIONAL[@]}"  # Restore positional parameters
 
-# Perform some args post-processing
+# TODO Error out on new args
+
+# ----------- Args post-processing -----------
+# Check that args are properly specified
 if [ -z $OUTPUT_DIR ]; then
     echo "--output-dir must be specified."
     exit 1
 fi
 if [[ -z $CORPUS && \
-      !($SKIP_AUGMENT_VOCAB = "TRUE" || \
-        $SKIP_DOMAIN_PRE_TRAIN = "TRUE" ) ]]; then
+      ! ( $SKIP_AUGMENT_VOCAB = "TRUE" || \
+          $SKIP_DOMAIN_PRE_TRAIN = "TRUE" ) ]]; then
     echo "--corpus must be specified unless \
           --skip-augment-vocab and --skip-domain-pre-train \
           are provided."
     exit 1
 fi
-if [[ -z FINE_TUNE_DATA_DIR && ! $SKIP_FINE_TUNE = "TRUE" ]]; then
-    echo "--fine-tune-data-dir must be specified unless \
-          --skip-fine-tune is provided."
+if [[ -z $FINE_TUNE_DATA_DIR && ! $SKIP_FINE_TUNE = "TRUE" ]]; then
+    echo "--fine-tune-data-dir must be specified unless --skip-fine-tune is provided."
     exit 1
 fi
 
+
+# Create intermediary args for use in scripts
 CORPUS_ARGS="$CORPUS"
-if ! [ -z $EVAL_CORPUS ]; then
-    CORPUS_ARGS="$CORPUS,$EVAL_CORPUS"
-fi
-OVERWRITE_ARGS=""
+for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
+    if ! [ -z $VAR ]; then
+        CORPUS_ARGS="$CORPUS,$VAR"
+    fi
+done
+
+OVERWRITE_ARGS=()
 if ! [ -z $OVERWRITE ]; then
-    OVERWRITE_ARGS="--overwrite_cache --overwrite_output_dir"
+    OVERWRITE_ARGS+=("--overwrite_cache")
+    OVERWRITE_ARGS+=("--overwrite_output_dir")
 fi
 
+DPT_EVAL_ARGS=()
+if ! [ -z $EVAL_CORPUS ]; then
+    read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
+fi
+
+# Directories
 DOMAIN_PRE_TRAIN_FOLDER="$OUTPUT_DIR/domain-pre-trained"
 AUGMENTED_VOCAB_PATH="$OUTPUT_DIR/augmented-vocab/vocab.txt"
 FINE_TUNE_FOLDER="$OUTPUT_DIR/fine-tuned"
@@ -116,10 +135,11 @@ FINE_TUNE_FOLDER="$OUTPUT_DIR/fine-tuned"
 if ! [ -z $VERBOSE ]; then
     echo
     echo '----------- Parameters -----------'
+    echo "OUTPUT_DIR: $OUTPUT_DIR"
     echo "CORPUS: $CORPUS"
     echo "EVAL_CORPUS: $EVAL_CORPUS"
+    echo "FINE_TUNE_TEXT: $FINE_TUNE_TEXT"
     echo "CORPUS_ARGS: $CORPUS_ARGS"
-    echo "OUTPUT_DIR: $OUTPUT_DIR"
     echo "BERT_VOCAB: $BERT_VOCAB"
     echo "BATCH_SIZE: $BATCH_SIZE"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
@@ -141,9 +161,9 @@ if ! [ -z $SKIP_AUGMENT_VOCAB ]; then
     echo "Skipping vocabulary augmentation as specified by user."
 else
     echo
-    echo "*************************************************"
+    echo "**************************************************"
     echo "Augmenting vocabulary with in-domain terminologies"
-    echo "*************************************************"
+    echo "**************************************************"
     python -m scripts.domain_adaptation.augment_vocab \
         --bert-vocab $BERT_VOCAB \
         --corpus $CORPUS_ARGS \
@@ -166,16 +186,15 @@ else
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
         --model_type bert \
         --tokenizer_vocab $AUGMENTED_VOCAB_PATH \
+        --block_size 512 \
         --do_train \
+        --num_train_epochs $EPOCHS_DPT \
         --train_data_file $CORPUS \
         --per_gpu_train_batch_size $BATCH_SIZE \
-        --num_train_epochs $EPOCHS_DPT \
-        --do_eval \
-        --block_size 512 \
-        --eval_data_file $EVAL_CORPUS \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
-        # $OVERWRITE_ARGS
+        ${DPT_EVAL_ARGS[@]} \
+        ${OVERWRITE_ARGS[@]}
     if [ $? -ne 0 ]; then
         echo "Domain pre-training failed. Halting pipeline."
         exit 1
@@ -192,9 +211,10 @@ else
     echo "************************************"
     python -m scripts.domain_adaptation.fine_tune_ner \
         --data_dir $FINE_TUNE_DATA_DIR \
+        --labels "$FINE_TUNE_DATA_DIR/labels.txt" \
         --output_dir $FINE_TUNE_FOLDER \
         --model_type bert \
-        --labels "$FINE_TUNE_DATA_DIR/labels.txt" \
+        --model_name_or_path $DOMAIN_PRE_TRAIN_FOLDER \
         --do_lower_case \
         --max_seq_length $MAX_LENGTH \
         --do_train \
@@ -203,5 +223,5 @@ else
         --do_eval \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --do_predict \
-        # $OVERWRITE_ARGS
+        ${OVERWRITE_ARGS[@]}
 fi
