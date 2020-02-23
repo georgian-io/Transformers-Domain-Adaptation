@@ -1,35 +1,32 @@
-"""Extract text data from US Court Jurisdiction JSON files."""
+"""Extract text data from US Court Jurisdictions JSON files."""
 import json
+import shutil
 import logging
 import argparse
 from pathlib import Path
-from typing import List, Union, Optional
 
-import pandas as pd
-from retrying import retry
+import apache_beam as beam
+from apache_beam.io import WriteToText
+from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 
-from src.utils.multiproc import parallelize
-from src.utils.shell import is_file_in_use
-from src.utils.text import clean as clean_text
 
+logger = logging.getLogger(__name__)
 
 TEXT_FIELDS = ['plain_text']
-CORPUS_PATH = Path('data/law/corpus/us_court_jurisdictions_opinions/acca')
-OUTPUT_FILENAME = 'us_courts_corpus.txt'
+CORPUS_PATH = Path('data/law/corpus/us_courts/all')
+OUTPUT_FOLDER = CORPUS_PATH / 'corpus'
+FILE_PREFIX = 'us_courts_corpus'
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Extract text data from pubmed baselines.",
+        "Extract text data from US Court Jurisdictions JSON files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-
-    parser.add_argument('--src', type=Path,
-                        default=CORPUS_PATH,
-                        help='Directory containing court opinions.')
-    parser.add_argument('--dst', type=Path,
-                        default=CORPUS_PATH.parent / OUTPUT_FILENAME,
-                        help='Path of file to write extracted texts to.')
+    parser.add_argument('--src', type=Path, default=CORPUS_PATH,
+                        help='Directory containing JSON court opinions.')
+    parser.add_argument('--dst', type=Path, default=OUTPUT_FOLDER,
+                        help='Output folder to write corpus shards.')
     parser.add_argument('--text-fields', type=lambda x: x.split(','),
                         default=['plain_text'],
                         help='A comma-delimited string of text columns to use '
@@ -40,70 +37,44 @@ def parse_args():
     parser.add_argument('--concat-str', type=str, default=' ',
                         help='String to concatenate text columns of the same '
                              'article together.')
-    args = parser.parse_args()
+    known_args, pipeline_args = parser.parse_known_args()
 
-    if len(set(args.text_fields) - set(TEXT_FIELDS)):
-        raise ValueError('Invalid text column values provided.')
-
-    return args
-
-
-@retry(retry_on_result=lambda x: x == True,
-       wait_random_min=1000,
-       wait_random_max=3000)
-def append_write(text: Union[str, List[str]],
-                 dst: Union[str, Path],
-                 filename: Union[str, Path],
-                ) -> Optional[bool]:
-    # Retry append if the file is being used by another process
-    if is_file_in_use(str(dst)):
-        logging.warning(f'{dst} is in use. Re-attempting write of {filename}')
-        return True
-
-    if isinstance(text, list):
-        text = '\n'.join(text)
-    text += '\n'
-    with open(dst, 'a+') as f:
-        f.write(text)
+    if len(set(known_args.text_fields) - set(TEXT_FIELDS)):
+        raise ValueError('Invalid text fields specified.')
+    return known_args, pipeline_args
 
 
-def _extract_text(filename: str,
-                  text_fields: List[str],
-                  concat_str: str
-                 ) -> str:
-    with open(filename, 'r') as f:
-        data = json.load(f)
-    texts = concat_str.join([clean_text(data[field]) for field in text_fields])
-    return texts
+def main(known_args, pipeline_args, save_main_session=True):
+    # Find all JSON files
+    files = [str(x) for x in Path(known_args.src).rglob('*.json')]
+    logger.info(f'Found {len(files)} JSON files to process.')
+
+    # Create save_directory
+    if known_args.dst.exists():
+        logger.info(f'Found an existing destination folder. Deleting...')
+        shutil.rmtree(known_args.dst, ignore_errors=True)
+    known_args.dst.mkdir(parents=True)
+
+    pipeline_options = PipelineOptions(pipeline_args)
+    pipeline_options.view_as(SetupOptions).save_main_session = save_main_session
+    with beam.Pipeline(options=pipeline_options) as p:
+        lines = (
+            p
+            | 'InitPipelineWithFilePaths' >> beam.Create(files)
+            | 'CreateJSON'
+                >> beam.Map(lambda x: json.loads(Path(x).read_text()))
+            | 'ExtractTextFromFields'
+                >> beam.Map(lambda x: [v for k, v in x.items()
+                                         if k in known_args.text_fields])
+            | 'ConcatTextFields'
+                >> beam.Map(lambda x: known_args.concat_str.join(x))
+            | 'WriteToText' >> WriteToText(str(known_args.dst / FILE_PREFIX))
+        )
+    logging.info('Processing complete! '
+                 f'The results are saved in {known_args.dst}.')
 
 
-def extract_and_write(filename, args):
-    """Extract and append text to the target file.
-
-    Text has to be appended to be memory efficient — Expected file size ~20GB.
-    """
-    texts = _extract_text(filename,
-                          text_fields=args.text_fields,
-                          concat_str=args.concat_str)
-    append_write(text=texts, dst=args.dst, filename=filename)
-
-
-def main(args):
-    # Create the blank target file for all processes to write to
-    with open(args.dst, 'w+') as f:
-        f.write('')
-
-    # Extract text and append them to file
-    result: List[List[str]] = (
-        parallelize(extract_and_write,
-                    [str(x) for x in Path(args.src).rglob('*.json')],
-                    args=args,
-                    n_workers=2,  # TEMP
-                    desc='Extracting text')
-    )
-
-
-if __name__ == "__main__":
-    logging.getLogger()
-    args = parse_args()
-    main(args)
+if __name__ == '__main__':
+    # logging.basicConfig(level=logging.INFO)
+    known_args, pipeline_args = parse_args()
+    main(known_args, pipeline_args)
