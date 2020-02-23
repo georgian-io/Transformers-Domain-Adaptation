@@ -1,26 +1,32 @@
 """Script to unzip all tar.gz files for US Court Jurisdictions."""
-import argparse
 import shutil
+import logging
+import argparse
 from pathlib import Path
 
-from utils import parallelize
+from src.utils.multiproc import parallelize
+from src.utils.general_path import GeneralPath
 
+logger = logging.getLogger(__name__)
 
-ALL_DIR = Path('data/law/corpus/us_court_jurisdictions_opinions/all')
+CORPUS_URL = GeneralPath('s3://nlp-domain-adaptation/domains/law/corpus/us_courts/all.tar')
+WORK_DIR = Path('data/law/corpus/us_courts/')
+ZIPPED_FOLDER = 'zipped'
+UNZIPPED_FOLDER = 'unzipped'
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Script to unzip all tar.gz files for US Court Jurisdictions.",
+        "Script to download, and unzip all.tar and subsequent tar.gz files for US Court Jurisdictions.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument('--src', type=Path,
-                        default=ALL_DIR,
-                        help='Directory containing zips.')
-    parser.add_argument('--dst', type=Path,
-                        default=ALL_DIR.parent,
-                        help='Directory to write results to.')
+    parser.add_argument('--work-dir', type=Path,
+                        default=WORK_DIR,
+                        help='Working directory.')
+    parser.add_argument('--delete-loaded-zip', action='store_true',
+                        help='If provided, delete zip file after it has been '
+                             'unpacked to save on storage.')
     return parser.parse_args()
 
 
@@ -45,7 +51,7 @@ def _load_in_parallel(zip_file: Path,
 
     # Extract file to target location
     extract_path.mkdir(exist_ok=True, parents=True)
-    shutil.unpack_archive(zip_file, extract_path)
+    shutil.unpack_archive(str(zip_file), str(extract_path))
 
     # Delete file to save space
     if delete_zip_file:
@@ -53,10 +59,24 @@ def _load_in_parallel(zip_file: Path,
 
 
 def main(args):
-    parallelize(_load_in_parallel, list(args.src.glob('*.tar.gz')),
-                dst=args.dst,
-                delete_zip_file=True,
-                desc='Unpacking ZIP files')
+    logging.basicConfig(level=logging.INFO)
+
+    # Download corpus from S3
+    if not (args.work_dir / 'all.tar').exists():
+        logger.INFO('Corpus does not exist. Downloading from S3...')
+        CORPUS_URL.download(str(args.work_dir))
+
+    # Create directory to store individual tar.gz files from unzipping all.tar
+    logger.INFO('Unzipping corpus...')
+    (args.work_dir / ZIPPED_FOLDER).mkdir(exists_ok=True, parents=True)
+    shutil.unpack_archive(str(args.work_dir / 'all.tar'),
+                          str(args.work_dir / ZIPPED_FOLDER))
+
+    parallelize(_load_in_parallel,
+                list((args.work_dir / ZIPPED_FOLDER).glob('*.tar.gz')),
+                dst=args.work_dir / UNZIPPED_FOLDER,
+                delete_zip_file=args.delete_loaded_zip,
+                desc='Unpacking secondary ZIP files')
 
 
 if __name__ == '__main__':
