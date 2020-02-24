@@ -5,7 +5,9 @@ import psutil
 import logging
 import argparse
 from pathlib import Path
+from functools import partial
 
+from bs4 import BeautifulSoup
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 import pyspark.sql.types as t
@@ -13,7 +15,7 @@ import pyspark.sql.types as t
 
 logger = logging.getLogger(__name__)
 
-TEXT_FIELDS = ['plain_text']
+TEXT_FIELDS = ['html_with_citations']
 CORPUS_PATH = Path('data/law/corpus/us_courts/unzipped')
 OUTPUT_FOLDER = CORPUS_PATH.parent / 'corpus'
 
@@ -28,7 +30,7 @@ def parse_args():
     parser.add_argument('--dst', type=Path, default=OUTPUT_FOLDER,
                         help='Output folder to write corpus shards.')
     parser.add_argument('--text-fields', type=lambda x: x.split(','),
-                        default=['plain_text'],
+                        default=TEXT_FIELDS,
                         help='A comma-delimited string of text columns to use '
                              'in processing. Valid columns are '
                              f'{set(TEXT_FIELDS)}. '
@@ -37,11 +39,17 @@ def parse_args():
     parser.add_argument('--concat-str', type=str, default=' ',
                         help='String to concatenate text columns of the same '
                              'article together.')
+    parser.add_argument('--spark-driver-mem', type=int, default=None,
+                        help='Memory (GBs) to allocate to the Spark driver')
     args = parser.parse_args()
 
     if len(set(args.text_fields) - set(TEXT_FIELDS)):
         raise ValueError('Invalid text fields specified.')
     return args
+
+
+def parse_html(x, concat_str: str = ' '):
+    return BeautifulSoup(x, 'lxml').get_text(concat_str)
 
 
 def main(args):
@@ -51,12 +59,15 @@ def main(args):
         shutil.rmtree(args.dst, ignore_errors=True)
 
     # Create Spark Session
+    if args.spark_driver_mem is not None:
+        driver_mem = f'{args.spark_driver_mem}g'
+    else:
+        driver_mem = '{0}g'.format(int(psutil.virtual_memory().total // 1e9))
     spark = (
         SparkSession
         .builder
         .appName(__name__)
-        .config('spark.driver.memory',
-                '{0}g'.format(int(psutil.virtual_memory().total // 1e9)))
+        .config('spark.driver.memory', driver_mem)
         .getOrCreate()
     )
 
@@ -90,23 +101,30 @@ def main(args):
     json_df = spark.read.json(str(args.src), schema=schema, multiLine=True)
     logger.info(f'Processing {json_df.count()} JSON files...')
 
+
+    # Create UDF to parse html markups
+    global parse_html
+    parse_html = partial(parse_html, concat_str=args.concat_str)
+    parse_html_udf = f.udf(parse_html, f.StringType())
+
     # Concatenating columns
     logger.info(f"Extracting text columns ({', '.join(args.text_fields)}) and "
                 f"concatenating with '{args.concat_str}'...")
     CAT_COL = 'concat'
     # First concat text columns in a row (i.e. JSON file)
     # Then, concat with all rows together
-    text_col_cated = (
+    texts_df = (
         json_df
         .select(*args.text_fields)
         .withColumn(CAT_COL, f.concat_ws(' ', *args.text_fields))
+        .withColumn(CAT_COL, parse_html_udf(CAT_COL))
         .agg(f.collect_list(CAT_COL).alias(CAT_COL))
         .withColumn(CAT_COL, f.concat_ws(' ', CAT_COL))
     )
 
     # Write file
     logger.info(f'Writing text to {args.dst}')
-    text_col_cated.write.text(str(args.dst))
+    texts_df.write.text(str(args.dst))
     logger.info(f'Text successfully saved to {args.dst}')
 
 
