@@ -1,21 +1,21 @@
 """Extract text data from US Court Jurisdictions JSON files."""
 import json
 import shutil
+import psutil
 import logging
 import argparse
 from pathlib import Path
 
-import apache_beam as beam
-from apache_beam.io import WriteToText
-from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
+from pyspark.sql import SparkSession
+import pyspark.sql.functions as f
+import pyspark.sql.types as t
 
 
 logger = logging.getLogger(__name__)
 
 TEXT_FIELDS = ['plain_text']
-CORPUS_PATH = Path('data/law/corpus/us_courts/all')
-OUTPUT_FOLDER = CORPUS_PATH / 'corpus'
-FILE_PREFIX = 'us_courts_corpus'
+CORPUS_PATH = Path('data/law/corpus/us_courts/unzipped')
+OUTPUT_FOLDER = CORPUS_PATH.parent / 'corpus'
 
 
 def parse_args():
@@ -37,44 +37,80 @@ def parse_args():
     parser.add_argument('--concat-str', type=str, default=' ',
                         help='String to concatenate text columns of the same '
                              'article together.')
-    known_args, pipeline_args = parser.parse_known_args()
+    args = parser.parse_args()
 
-    if len(set(known_args.text_fields) - set(TEXT_FIELDS)):
+    if len(set(args.text_fields) - set(TEXT_FIELDS)):
         raise ValueError('Invalid text fields specified.')
-    return known_args, pipeline_args
+    return args
 
 
-def main(known_args, pipeline_args, save_main_session=True):
-    # Find all JSON files
-    files = [str(x) for x in Path(known_args.src).rglob('*.json')]
-    logger.info(f'Found {len(files)} JSON files to process.')
-
-    # Create save_directory
-    if known_args.dst.exists():
+def main(args):
+    # Create a directory to save outputs
+    if args.dst.exists():
         logger.info(f'Found an existing destination folder. Deleting...')
-        shutil.rmtree(known_args.dst, ignore_errors=True)
-    known_args.dst.mkdir(parents=True)
+        shutil.rmtree(args.dst, ignore_errors=True)
 
-    pipeline_options = PipelineOptions(pipeline_args)
-    pipeline_options.view_as(SetupOptions).save_main_session = save_main_session
-    with beam.Pipeline(options=pipeline_options) as p:
-        lines = (
-            p
-            | 'InitPipelineWithFilePaths' >> beam.Create(files)
-            | 'CreateJSON'
-                >> beam.Map(lambda x: json.loads(Path(x).read_text()))
-            | 'ExtractTextFromFields'
-                >> beam.Map(lambda x: [v for k, v in x.items()
-                                         if k in known_args.text_fields])
-            | 'ConcatTextFields'
-                >> beam.Map(lambda x: known_args.concat_str.join(x))
-            | 'WriteToText' >> WriteToText(str(known_args.dst / FILE_PREFIX))
-        )
-    logging.info('Processing complete! '
-                 f'The results are saved in {known_args.dst}.')
+    # Create Spark Session
+    spark = (
+        SparkSession
+        .builder
+        .appName(__name__)
+        .config('spark.driver.memory',
+                '{0}g'.format(int(psutil.virtual_memory().total // 1e9)))
+        .getOrCreate()
+    )
+
+    # Build schema
+    schema = t.StructType([
+        t.StructField('absolute_url', t.StringType()),
+        t.StructField('author', t.StringType()),
+        t.StructField('author_str', t.StringType()),
+        t.StructField('cluster', t.StringType()),
+        t.StructField('date_created', t.DateType()),
+        t.StructField('date_modified', t.DateType()),
+        t.StructField('download_url', t.StringType()),
+        t.StructField('extracted_by_ocr', t.BooleanType()),
+        t.StructField('html', t.StringType()),
+        t.StructField('html_columbia', t.StringType()),
+        t.StructField('html_lawbox', t.StringType()),
+        t.StructField('html_with_citations', t.StringType()),
+        t.StructField('id', t.LongType()),
+        t.StructField('joined_by', t.ArrayType(t.StringType())),
+        t.StructField('local_path', t.StringType()),
+        t.StructField('opinions_cited', t.ArrayType(t.StringType())),
+        t.StructField('page_count', t.IntegerType()),
+        t.StructField('per_curiam', t.BooleanType()),
+        t.StructField('plain_text', t.BooleanType()),
+        t.StructField('resource_uri', t.BooleanType()),
+        t.StructField('sha1', t.StringType()),
+        t.StructField('type', t.StringType()),
+    ])
+
+    # Find all json files
+    json_df = spark.read.json(str(args.src), schema=schema, multiLine=True)
+    logger.info(f'Processing {json_df.count()} JSON files...')
+
+    # Concatenating columns
+    logger.info(f"Extracting text columns ({', '.join(args.text_fields)}) and "
+                f"concatenating with '{args.concat_str}'...")
+    CAT_COL = 'concat'
+    # First concat text columns in a row (i.e. JSON file)
+    # Then, concat with all rows together
+    text_col_cated = (
+        json_df
+        .select(*args.text_fields)
+        .withColumn(CAT_COL, f.concat_ws(' ', *args.text_fields))
+        .agg(f.collect_list(CAT_COL).alias(CAT_COL))
+        .withColumn(CAT_COL, f.concat_ws(' ', CAT_COL))
+    )
+
+    # Write file
+    logger.info(f'Writing text to {args.dst}')
+    text_col_cated.write.text(str(args.dst))
+    logger.info(f'Text successfully saved to {args.dst}')
 
 
 if __name__ == '__main__':
-    # logging.basicConfig(level=logging.INFO)
-    known_args, pipeline_args = parse_args()
-    main(known_args, pipeline_args)
+    logging.basicConfig(level=logging.INFO)
+    args = parse_args()
+    main(args)

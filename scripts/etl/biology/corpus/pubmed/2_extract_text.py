@@ -14,7 +14,7 @@ from src.utils.shell import is_file_in_use
 
 
 PUBMED_DIR = Path('data/biology/corpus/pubmed')
-OUTPUT_FILENAME = 'pubmed_corpus.txt'
+OUTPUT_FOLDER = PUBMED_DIR / 'corpus'
 ARTICLE_XML_PATH = 'PubmedArticle/MedlineCitation/Article'
 TAG_MAPPINGS = {
     'abstract': 'Abstract/AbstractText',
@@ -32,7 +32,7 @@ def parse_args():
                         default=PUBMED_DIR,
                         help='Directory containing zips.')
     parser.add_argument('--dst', type=Path,
-                        default=PUBMED_DIR / OUTPUT_FILENAME,
+                        default=OUTPUT_FOLDER,
                         help='Path of file to write results to.')
     parser.add_argument('--text-fields', type=lambda x: x.split(','),
                         default=['abstract'],
