@@ -2,7 +2,7 @@
 import logging
 import argparse
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Optional
 
 import nltk
 import numpy as np
@@ -13,6 +13,8 @@ from tokenizers import BertWordPieceTokenizer
 
 
 logger = logging.getLogger(__name__)
+
+VOCAB_CACHE_PREFIX = 'temp-in-domain'
 
 
 def parse_args():
@@ -37,14 +39,20 @@ def parse_args():
                              'WordPieceTokenizer')
     parser.add_argument('--rank-by', choices=('count', 'tfidf'),
                         default='count', help='Ranking heuristic')
-    return parser.parse_args()
+    parser.add_argument('--overwrite_cache', action='store_true',
+                        help='If provided, train tokenizer vocabulary from '
+                             'scratch.')
+    args, _ = parser.parse_known_args()
+    return args
 
 
 def train_tokenizer(corpus: Union[str, List[str]],
                     vocab_size: int = 30519,
+                    overwrite: bool = True,
                     lowercase: bool = True,
                     save_vocab: bool = False,
-                    in_domain_vocab: str = 'in-domain-vocab.txt',
+                    dst: Optional[str] = None,
+                    in_domain_vocab: str = VOCAB_CACHE_PREFIX,
                    ) -> BertWordPieceTokenizer:
     """Train a WordPiece tokenizer from scratch.
 
@@ -65,20 +73,30 @@ def train_tokenizer(corpus: Union[str, List[str]],
     if not isinstance(corpus, list):
         corpus = [corpus]
 
-    tokenizer = BertWordPieceTokenizer(lowercase=lowercase)
+    # Load cached vocab if possible
+    if not overwrite:
+        cached_vocab = Path(dst) / (VOCAB_CACHE_PREFIX + '-vocab.txt')
 
-    logger.info('Training new WordPiece tokenizer on in-domain corpora...')
+        if cached_vocab.exists():
+            logger.info(f'Loading cached vocabulary at {cached_vocab}')
+            return BertWordPieceTokenizer(str(cached_vocab))
+        else:
+            logger.info(f'Cached vocabulary not found at {cached_vocab}')
+
+    # Train tokenizer
+    logger.info('Training new WordPiece tokenizer on in-domain corpora')
+    tokenizer = BertWordPieceTokenizer(lowercase=lowercase)
     tokenizer.train(corpus, vocab_size=vocab_size)
 
     if save_vocab:
-        tokenizer.save('.', in_domain_vocab.rsplit('-', 1)[0])
-        logger.info(f'Saved trained tokenizer to {in_domain_vocab}')
+        tokenizer.save('.' if dst is None else dst, in_domain_vocab)
+        logger.info('Saved in-domain vocabulary to '
+                    f'{Path(dst) / (in_domain_vocab + "-vocab.txt")}')
     return tokenizer
 
 
 def tokenize(texts: List[str],
-             tokenizer: Union[str, BertWordPieceTokenizer],
-             lowercase: bool = True,
+             tokenizer: BertWordPieceTokenizer,
              flat_map: bool = False,
             ) -> Union[List[str],
                        List[List[str]]]:
@@ -86,11 +104,8 @@ def tokenize(texts: List[str],
 
     Arguments:
         texts {List[str]} -- Text data to tokenize
-        tokenizer {Union[str, BertWordPieceTokenizer]}
-            -- Path to tokenizer vocabulary.
-               Alternatively, supply a BertWordPieceTokenizer from the
-               `tokenizers` library
-        lowercase {bool} -- If True, perform lowercasing.
+        tokenizer {BertWordPieceTokenizer}
+            -- A BertWordPieceTokenizer from the `tokenizers` library
         flat_map {bool} -- If True, flat maps results into a List[str],
                            instead of List[List[str]].
 
@@ -98,13 +113,10 @@ def tokenize(texts: List[str],
         A tokenized string or a list of tokenized string.
     """
     # Instantiate the tokenizer
-    if isinstance(tokenizer, str):
-        tokenizer = BertWordPieceTokenizer(str(tokenizer), lowercase=lowercase)
-    elif not hasattr(tokenizer, 'encode_batch'):
+    if not hasattr(tokenizer, 'encode_batch'):
         raise AttributeError(f'Provided `tokenizer` is not from `tokenizers` '
                              'library.')
 
-    logger.info('Tokenizing texts...')
     if flat_map:
         tokenized = [t for enc in tokenizer.encode_batch(texts)
                        for t in enc.tokens]
@@ -141,7 +153,7 @@ def rank_tokens(tokenized_docs: List[List[str]],
         raise ValueError(f'Invalid mode {mode} provided. '
                          f'Expecting value from {MODES}.')
 
-    logger.info(f'Ranking tokens by {mode}...')
+    logger.info(f'Ranking tokens by {mode}')
     if mode == 'count':
         return _rank_tokens_by_count(tokenized_docs)
     else:
@@ -214,7 +226,7 @@ def create_updated_vocab_txt(top_terms: List[str],
         ori_vocab_path {str} -- Path to existing vocabulary txt file
         updated_vocab_path {str} -- Path to save updated vocabulary txt file
     """
-    logger.info('Updating vocabulary...')
+    logger.info('Updating vocabulary')
     # Get stop words
     stopwords = _get_stop_words() + ["[CLS]", "[SEP]"]
 
@@ -240,7 +252,6 @@ def create_updated_vocab_txt(top_terms: List[str],
             vocab[i] = mapping[ori_term]
 
     # Saves vocab
-    Path(updated_vocab_path).parent.mkdir(exist_ok=True, parents=True)
     with open(updated_vocab_path, 'w+') as f:
         f.write('\n'.join(vocab))
     logger.info(f'Updated vocabulary saved at {updated_vocab_path}')
@@ -251,24 +262,29 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO)
 
+    # Create directory
+    Path(args.dst).mkdir(exist_ok=True, parents=True)
+
     # Train and save in-domain corpora as text file
-    tokenizer = train_tokenizer(args.corpus, lowercase=args.lowercase)
+    tokenizer = train_tokenizer(args.corpus,
+                                overwrite=args.overwrite_cache,
+                                lowercase=args.lowercase,
+                                dst=args.dst,
+                                save_vocab=True)
 
     # Load corpus / corpora
-    corpus = []
+    tokenized_corpus = []
     for c in args.corpus:
+        logger.info(f'Tokenizing {c} with in-domain tokenizer')
         with open(c) as f:
-            corpus += [x.strip() for x in f.readlines()]
-
-    # Tokenize corpus
-    tokenized_corpus = tokenize(corpus,
-                                tokenizer=tokenizer,
-                                lowercase=args.lowercase)
+            tokenized_corpus += tokenize(f.readlines(),
+                                         tokenizer=tokenizer)
 
     # Rank tokens
     ranked_tokens = rank_tokens(tokenized_corpus, mode=args.rank_by)
 
     # Save augmented vocabulary to text file
+    updated_vocab_path = (Path(args.dst) / 'vocab.txt').as_posix()
     create_updated_vocab_txt(ranked_tokens,
                              ori_vocab_path=args.bert_vocab,
-                             updated_vocab_path=args.dst)
+                             updated_vocab_path=updated_vocab_path)
