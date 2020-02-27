@@ -103,13 +103,14 @@ class TextDataset(Dataset):
             with open(cached_features_file, "rb") as handle:
                 self.examples = pickle.load(handle)
         else:
-            logger.info("Creating features from dataset file at %s", directory)
-
+            logger.info("Reading dataset at %s", file_path)
             self.examples = []
             with open(file_path, encoding="utf-8") as f:
-                text = f.read()
+                text = f.readlines()
 
-            tokenized_text = tokenizer.encode(text).ids[1:-1]  # Get all token IDs except [CLS] and [SEP]
+            logger.info("Creating features from dataset file at %s", directory)
+            # Get all token IDs except [CLS] and [SEP] and flat map IDs
+            tokenized_text = [t for tokenized in tokenizer.encode_batch(text) for t in tokenized.ids[1:-1]]
             cls_token, sep_token = tokenizer.encode('').ids
 
             for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
