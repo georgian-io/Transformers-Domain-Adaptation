@@ -354,7 +354,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
         features = torch.load(cached_features_file)
     else:
         logger.info("Creating features from dataset file at %s", args.data_dir)
-        examples = read_examples_from_file(args.data_dir, mode)
+        examples = read_examples_from_file(args.data_dir, mode, args.suffix)
         features = convert_examples_to_features(
             examples,
             labels,
@@ -432,6 +432,12 @@ def main():
         default="",
         type=str,
         help="Path to a file containing all labels. If not specified, CoNLL-2003 labels are used.",
+    )
+    parser.add_argument(
+        "--suffix",
+        default=".txt",
+        type=str,
+        help="Data set file suffixes."
     )
     parser.add_argument(
         "--config_name", default="", type=str, help="Pretrained config name or path if not the same as model_name"
@@ -675,7 +681,7 @@ def main():
         # Save predictions
         output_test_predictions_file = os.path.join(args.output_dir, "test_predictions.txt")
         with open(output_test_predictions_file, "w") as writer:
-            with open(os.path.join(args.data_dir, "test.txt"), "r") as f:
+            with open((Path(args.data_dir) / "test").with_suffix(args.suffix), "r") as f:
                 example_id = 0
                 for line in f:
                     if line.startswith("-DOCSTART-") or line == "" or line == "\n":
