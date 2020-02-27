@@ -7,7 +7,7 @@ def run_shell(cmd: str) -> str:
     """Run a shell command using the subprocess module."""
     return run(shlex.split(cmd),
                stdout=PIPE, stderr=PIPE,
-               check=True, text=True)
+               check=True, universal_newlines=True)
 
 
 def is_file_in_use(filename: str) -> bool:
