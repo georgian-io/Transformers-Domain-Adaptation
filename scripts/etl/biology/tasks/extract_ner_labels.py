@@ -1,11 +1,15 @@
 """Script to extract NER labels."""
+import logging
 import argparse
 from pathlib import Path
 
 import pandas as pd
 
 
+logger = logging.getLogger(__name__)
+
 LABEL_FILE = 'labels.txt'
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -29,8 +33,10 @@ def main(args):
 
     with open(args.src / LABEL_FILE, 'w+') as f:
         f.write('\n'.join(labels))
+    logger.info(f'Successfully created labels at {args.src / LABEL_FILE}')
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     args = parse_args()
     main(args)
