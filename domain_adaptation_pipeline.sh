@@ -65,6 +65,14 @@ while [ $# -gt 0 ]; do
         OVERWRITE=TRUE
         shift
         ;;
+        --overwrite-cache)
+        OVERWRITE_CACHE="--overwrite_cache"
+        shift
+        ;;
+        --overwrite-output-dir)
+        OVERWRITE_OUTPUT_DIR="--overwrite_output_dir"
+        shift
+        ;;
         --skip-augment-vocab)
         SKIP_AUGMENT_VOCAB=TRUE
         shift
@@ -112,17 +120,31 @@ fi
 
 
 # Create intermediary args for use in scripts
-CORPUS_ARGS="$CORPUS"
+# 1. Expand $CORPUS to all child text files
+# 2. Include additional corpora like an eval corpus or corpora from fine tuning
+if [ -f $CORPUS ]; then
+    CORPUS_ARGS=$CORPUS
+elif [ -d $CORPUS ]; then
+    for shard in $CORPUS/*.txt; do
+        if [ -z $CORPUS_ARGS ]; then
+            CORPUS_ARGS=$shard
+        else
+            CORPUS_ARGS="$CORPUS_ARGS,$shard"
+        fi
+    done
+fi
 for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
     if ! [ -z $VAR ]; then
-        CORPUS_ARGS="$VAR,$CORPUS"
+        CORPUS_ARGS="$CORPUS_ARGS,$VAR"
     fi
 done
 
 OVERWRITE_ARGS=()
-if ! [ -z $OVERWRITE ]; then
-    OVERWRITE_ARGS+=("--overwrite_cache")
-    OVERWRITE_ARGS+=("--overwrite_output_dir")
+if ! [ -z $OVERWRITE_CACHE ]; then
+    OVERWRITE_ARGS+=($OVERWRITE_CACHE)
+fi
+if ! [ -z $OVERWRITE_OUTPUT_DIR ]; then
+    OVERWRITE_ARGS+=($OVERWRITE_OUTPUT_DIR)
 fi
 
 DPT_EVAL_ARGS=()
@@ -136,8 +158,8 @@ if ! [ -z $FP16 ]; then
 fi
 
 # Directories
+AUGMENTED_VOCAB_FOLDER="$OUTPUT_DIR/augmented-vocab"
 DOMAIN_PRE_TRAIN_FOLDER="$OUTPUT_DIR/domain-pre-trained"
-AUGMENTED_VOCAB_PATH="$OUTPUT_DIR/augmented-vocab/vocab.txt"
 FINE_TUNE_FOLDER="$OUTPUT_DIR/fine-tuned"
 
 # If --verbose is provided, print all parameters
@@ -160,7 +182,7 @@ if ! [ -z $VERBOSE ]; then
     echo "SKIP_AUGMENT_VOCAB: $SKIP_AUGMENT_VOCAB"
     echo "SKIP_DOMAIN_PRE_TRAIN: $SKIP_DOMAIN_PRE_TRAIN"
     echo "SKIP_FINE_TUNING: $SKIP_FINE_TUNE"
-    echo "AUGMENTED_VOCAB_PATH: $AUGMENTED_VOCAB_PATH"
+    echo "AUGMENTED_VOCAB_FOLDER: $AUGMENTED_VOCAB_FOLDER"
     echo "DOMAIN_PRE_TRAIN_FOLDER: $DOMAIN_PRE_TRAIN_FOLDER"
     echo "FINE_TUNE_FOLDER: $FINE_TUNE_FOLDER"
     echo
@@ -177,7 +199,8 @@ else
     python -m scripts.domain_adaptation.augment_vocab \
         --bert-vocab $BERT_VOCAB \
         --corpus $CORPUS_ARGS \
-        --dst $AUGMENTED_VOCAB_PATH
+        --dst $AUGMENTED_VOCAB_FOLDER \
+        ${OVERWRITE_ARGS[@]}
     if [ $? -ne 0 ]; then
         echo "Vocabulary augmentation failed. Halting pipeline."
         exit 1
@@ -199,7 +222,7 @@ else
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
-        --train_data_file $CORPUS \
+        --train_data_file $CORPUS_ARGS \
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
@@ -223,6 +246,7 @@ else
     python -m scripts.domain_adaptation.fine_tune_ner \
         --data_dir $FINE_TUNE_DATA_DIR \
         --labels "$FINE_TUNE_DATA_DIR/labels.txt" \
+        --suffix ".tsv" \
         --output_dir $FINE_TUNE_FOLDER \
         --model_type bert \
         --model_name_or_path $DOMAIN_PRE_TRAIN_FOLDER \
@@ -230,9 +254,7 @@ else
         --max_seq_length $MAX_LENGTH \
         --do_train \
         --num_train_epochs $NUM_EPOCHS_NER \
-        --per_gpu_train_batch_size $BATCH_SIZE \
         --do_eval \
-        --per_gpu_eval_batch_size $BATCH_SIZE \
         --do_predict \
         $FP16_ARGS \
         ${OVERWRITE_ARGS[@]}
