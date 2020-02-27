@@ -7,15 +7,15 @@ import argparse
 from pathlib import Path
 from functools import partial
 
-from bs4 import BeautifulSoup
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 import pyspark.sql.types as t
 
+from src.etl.cat_text import cat
+
 
 logger = logging.getLogger(__name__)
 
-TEXT_FIELDS = ['html_with_citations']
 CORPUS_PATH = Path('data/law/corpus/us_courts/unzipped')
 OUTPUT_FOLDER = CORPUS_PATH.parent / 'corpus'
 
@@ -29,27 +29,11 @@ def parse_args():
                         help='Directory containing JSON court opinions.')
     parser.add_argument('--dst', type=Path, default=OUTPUT_FOLDER,
                         help='Output folder to write corpus shards.')
-    parser.add_argument('--text-fields', type=lambda x: x.split(','),
-                        default=TEXT_FIELDS,
-                        help='A comma-delimited string of text columns to use '
-                             'in processing. Valid columns are '
-                             f'{set(TEXT_FIELDS)}. '
-                             'Concatenation occurs in the order the text '
-                             'columns are specified')
-    parser.add_argument('--concat-str', type=str, default=' ',
-                        help='String to concatenate text columns of the same '
-                             'article together.')
     parser.add_argument('--spark-driver-mem', type=int, default=None,
                         help='Memory (GBs) to allocate to the Spark driver')
     args = parser.parse_args()
 
-    if len(set(args.text_fields) - set(TEXT_FIELDS)):
-        raise ValueError('Invalid text fields specified.')
     return args
-
-
-def parse_html(x, concat_str: str = ' '):
-    return BeautifulSoup(x, 'lxml').get_text(concat_str)
 
 
 def main(args):
@@ -101,31 +85,28 @@ def main(args):
     json_df = spark.read.json(str(args.src), schema=schema, multiLine=True)
     logger.info(f'Processing {json_df.count()} JSON files...')
 
-
-    # Create UDF to parse html markups
-    global parse_html
-    parse_html = partial(parse_html, concat_str=args.concat_str)
-    parse_html_udf = f.udf(parse_html, f.StringType())
-
     # Concatenating columns
-    logger.info(f"Extracting text columns ({', '.join(args.text_fields)}) and "
-                f"concatenating with '{args.concat_str}'...")
     CAT_COL = 'concat'
-    # First concat text columns in a row (i.e. JSON file)
-    # Then, concat with all rows together
     texts_df = (
         json_df
-        .select(*args.text_fields)
-        .withColumn(CAT_COL, f.concat_ws(' ', *args.text_fields))
-        .withColumn(CAT_COL, parse_html_udf(CAT_COL))
-        .agg(f.collect_list(CAT_COL).alias(CAT_COL))
-        .withColumn(CAT_COL, f.concat_ws(' ', CAT_COL))
+        .withColumnRenamed('plain_text', CAT_COL)
+        .select(CAT_COL)
     )
 
-    # Write file
-    logger.info(f'Writing text to {args.dst}')
+    texts_df = texts_df.filter(~((texts_df[CAT_COL] == "")
+                                 | texts_df[CAT_COL].isNull()
+                                 | f.isnan(texts_df[CAT_COL])))
+    logger.info(f'{texts_df.count()} JSON files remain after filtering for null values.')
+
+    # Write file into one merged text file
+    merged_file = (args.dst.parent / args.dst.stem).with_suffix('.txt')
+    logger.info(f'Writing text to {merged_file}')
+
     texts_df.write.text(str(args.dst))
-    logger.info(f'Text successfully saved to {args.dst}')
+    cat(args.dst, merged_file)
+    shutil.rmtree(args.dst, ignore_errors=True)
+
+    logger.info(f'Text successfully written to {merged_file}')
 
 
 if __name__ == '__main__':
