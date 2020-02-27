@@ -88,14 +88,14 @@ MODEL_CLASSES = {
 
 
 class TextDataset(Dataset):
-    def __init__(self, tokenizer: Tokenizer, args, file_path: str, block_size=512):
-        assert os.path.isfile(file_path)
+    def __init__(self, tokenizer: Tokenizer, args, file_paths: str, block_size=512):
+        assert all([os.path.isfile(file_path) for file_path in file_paths])
 
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
-        directory, filename = os.path.split(file_path)
+        directory, filename = os.path.split(file_paths[0])
         cached_features_file = os.path.join(
-            directory, args.model_type + "_cached_lm_" + str(block_size) + "_" + filename
+            directory, args.model_type + "_cached_lm_" + str(block_size) + "_" + Path(filename).stem
         )
 
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
@@ -103,16 +103,18 @@ class TextDataset(Dataset):
             with open(cached_features_file, "rb") as handle:
                 self.examples = pickle.load(handle)
         else:
-            logger.info("Reading dataset at %s", file_path)
-            self.examples = []
-            with open(file_path, encoding="utf-8") as f:
-                text = f.readlines()
+            logger.info("Reading dataset at %s", file_paths)
+            text = []
+            for file_path in file_paths:
+                with open(file_path, encoding="utf-8") as f:
+                    text += f.readlines()
 
             logger.info("Creating features from dataset file at %s", directory)
             # Get all token IDs except [CLS] and [SEP] and flat map IDs
             tokenized_text = [t for tokenized in tokenizer.encode_batch(text) for t in tokenized.ids[1:-1]]
             cls_token, sep_token = tokenizer.encode('').ids
 
+            self.examples = []
             for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
                 self.examples.append([cls_token] + tokenized_text[i : i + block_size] + [sep_token])
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
@@ -120,6 +122,7 @@ class TextDataset(Dataset):
             # can change this behavior by adding (model specific) padding.
 
             logger.info("Saving features into cached file %s", cached_features_file)
+            Path(cached_features_file).parent.mkdir(exist_ok=True, parents=True)
             with open(cached_features_file, "wb") as handle:
                 pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -131,15 +134,17 @@ class TextDataset(Dataset):
 
 
 class LineByLineTextDataset(Dataset):
-    def __init__(self, tokenizer: Tokenizer, args, file_path: str, block_size=512):
-        assert os.path.isfile(file_path)
+    def __init__(self, tokenizer: Tokenizer, args, file_paths: str, block_size=512):
+        assert all([os.path.isfile(file_path) for file_path in file_paths])
         # Here, we do not cache the features, operating under the assumption
         # that we will soon use fast multithreaded tokenizers from the
         # `tokenizers` repo everywhere =)
-        logger.info("Creating features from dataset file at %s", file_path)
+        logger.info("Creating features from dataset file at %s", file_paths[0])
 
-        with open(file_path, encoding="utf-8") as f:
-            lines = [line for line in f.read().splitlines() if (len(line) > 0 and not line.isspace())]
+        lines = []
+        for file_path in file_paths:
+            with open(file_path, encoding="utf-8") as f:
+                lines += [line for line in f.read().splitlines() if (len(line) > 0 and not line.isspace())]
 
         self.examples = truncate([x.id for x in tokenizer.encode_batch(lines)])
 
@@ -151,13 +156,13 @@ class LineByLineTextDataset(Dataset):
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False):
-    file_path = args.eval_data_file if evaluate else args.train_data_file
+    file_paths = args.eval_data_file if evaluate else args.train_data_file
     # Use Rust-based tokenizers temporarily
     rust_tokenizer = BertWordPieceTokenizer(args.tokenizer_vocab)
     if args.line_by_line:
-        return LineByLineTextDataset(rust_tokenizer, args, file_path=file_path, block_size=args.block_size)
+        return LineByLineTextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
     else:
-        return TextDataset(rust_tokenizer, args, file_path=file_path, block_size=args.block_size)
+        return TextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
 
 
 def set_seed(args):
@@ -495,7 +500,8 @@ def main():
 
     # Required parameters
     parser.add_argument(
-        "--train_data_file", default=None, type=str, required=True, help="The input training data file (a text file)."
+        "--train_data_file", default=None, type=lambda x: x.split(','), required=True,
+        help="The input training data text file. If multiple files, separate by comma."
     )
     parser.add_argument(
         "--output_dir",
