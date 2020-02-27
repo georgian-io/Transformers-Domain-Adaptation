@@ -91,8 +91,8 @@ def main(args):
         t.StructField('opinions_cited', t.ArrayType(t.StringType())),
         t.StructField('page_count', t.IntegerType()),
         t.StructField('per_curiam', t.BooleanType()),
-        t.StructField('plain_text', t.BooleanType()),
-        t.StructField('resource_uri', t.BooleanType()),
+        t.StructField('plain_text', t.StringType()),
+        t.StructField('resource_uri', t.StringType()),
         t.StructField('sha1', t.StringType()),
         t.StructField('type', t.StringType()),
     ])
