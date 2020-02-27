@@ -57,6 +57,10 @@ while [ $# -gt 0 ]; do
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
+        --fp16)
+        FP16=TRUE
+        shift
+        ;;
         --overwrite)
         OVERWRITE=TRUE
         shift
@@ -111,7 +115,7 @@ fi
 CORPUS_ARGS="$CORPUS"
 for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
     if ! [ -z $VAR ]; then
-        CORPUS_ARGS="$CORPUS,$VAR"
+        CORPUS_ARGS="$VAR,$CORPUS"
     fi
 done
 
@@ -124,6 +128,11 @@ fi
 DPT_EVAL_ARGS=()
 if ! [ -z $EVAL_CORPUS ]; then
     read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
+fi
+
+FP16_ARGS=""
+if ! [ -z $FP16 ]; then
+    FP16_ARGS="--fp16"
 fi
 
 # Directories
@@ -142,6 +151,7 @@ if ! [ -z $VERBOSE ]; then
     echo "CORPUS_ARGS: $CORPUS_ARGS"
     echo "BERT_VOCAB: $BERT_VOCAB"
     echo "BATCH_SIZE: $BATCH_SIZE"
+    echo "FP16: $FP16"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
     echo "POSITIONAL: $POSITIONAL"
@@ -193,6 +203,7 @@ else
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
+        $FP16_ARGS \
         ${DPT_EVAL_ARGS[@]} \
         ${OVERWRITE_ARGS[@]}
     if [ $? -ne 0 ]; then
@@ -223,5 +234,6 @@ else
         --do_eval \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --do_predict \
+        $FP16_ARGS \
         ${OVERWRITE_ARGS[@]}
 fi
