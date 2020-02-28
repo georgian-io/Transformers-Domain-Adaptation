@@ -1,15 +1,18 @@
 """BERT vocabulary update functionality."""
 import logging
 import argparse
+import itertools as it
 from pathlib import Path
+from collections import Counter
 from typing import List, Union, Optional
 
 import nltk
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-
 from tokenizers import BertWordPieceTokenizer
+
+from src.utils.iter import batch
 
 
 logger = logging.getLogger(__name__)
@@ -42,8 +45,12 @@ def parse_args():
     parser.add_argument('--overwrite_cache', action='store_true',
                         help='If provided, train tokenizer vocabulary from '
                              'scratch.')
-    args, _ = parser.parse_known_args()
-    return args
+    parser.add_argument('-t', '--tokenization-batch-size',
+                        type=int, default=1024*2,
+                        help='Number of lines to tokenize each time. '
+                             'Larger values lead to time savings at the '
+                             'expense of larger memory requirements.')
+    return parser.parse_args()
 
 
 def train_tokenizer(corpus: Union[str, List[str]],
@@ -123,6 +130,31 @@ def tokenize(texts: List[str],
     else:
         tokenized = [enc.tokens for enc in tokenizer.encode_batch(texts)]
     return tokenized
+
+
+def fused_tokenize_and_rank(corpora: List[str],
+                            tokenizer: BertWordPieceTokenizer,
+                            batch_size: int
+                           ) -> List[str]:
+    def read_text_with_logging(corpus: str) -> List[str]:
+        logger.info(f'Loading text from {corpus}')
+        return Path(corpus).read_text(encoding="utf-8").splitlines()
+
+    lines = it.chain.from_iterable(read_text_with_logging(c)
+                                   for c in corpora)
+    batches = batch(lines, batch_size)
+    tokenized_batches = (
+        tokens.ids[1:-1]
+        for batch in batches
+        for tokens in tokenizer.encode_batch(list(batch))
+    )
+    counters = (Counter(x) for x in tokenized_batches)
+
+    # Get last element which contains the accumulated counts over all counters
+    *_, counts = it.accumulate(counters)
+
+    ranked_tokens = [token for token, _ in counts.most_common()]
+    return ranked_tokens
 
 
 def rank_tokens(tokenized_docs: List[List[str]],
@@ -272,16 +304,24 @@ if __name__ == '__main__':
                                 dst=args.dst,
                                 save_vocab=True)
 
-    # Load corpus / corpora
-    tokenized_corpus = []
-    for c in args.corpus:
-        logger.info(f'Tokenizing {c} with in-domain tokenizer')
-        with open(c) as f:
-            tokenized_corpus += tokenize(f.readlines(),
-                                         tokenizer=tokenizer)
+    if args.rank_by == 'count':
+        logger.info('Using fused tokenization and ranking for better performance')
+        ranked_tokens = fused_tokenize_and_rank(
+            args.corpus,
+            tokenizer=tokenizer,
+            batch_size=args.tokenization_batch_size
+        )
+    else:
+        # Load corpus / corpora
+        tokenized_corpus = []
+        for c in args.corpus:
+            logger.info(f'Tokenizing {c} with in-domain tokenizer')
+            with open(c) as f:
+                tokenized_corpus += tokenize(f.readlines(),
+                                            tokenizer=tokenizer)
 
-    # Rank tokens
-    ranked_tokens = rank_tokens(tokenized_corpus, mode=args.rank_by)
+        # Rank tokens
+        ranked_tokens = rank_tokens(tokenized_corpus, mode=args.rank_by)
 
     # Save augmented vocabulary to text file
     updated_vocab_path = (Path(args.dst) / 'vocab.txt').as_posix()
