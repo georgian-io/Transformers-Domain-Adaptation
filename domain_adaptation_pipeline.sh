@@ -5,6 +5,11 @@ BERT_VOCAB="bert-base-uncased-vocab.txt"
 BATCH_SIZE=4
 EPOCHS_DPT=1
 
+FP16=""
+
+OVERWRITE_CACHE=""
+OVERWRITE_OUTPUT_DIR=""
+
 IFS="="  # Change the internal field separator
 while [ $# -gt 0 ]; do
     ARG1="$1"
@@ -58,11 +63,7 @@ while [ $# -gt 0 ]; do
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
         --fp16)
-        FP16=TRUE
-        shift
-        ;;
-        --overwrite)
-        OVERWRITE=TRUE
+        FP16="--fp16"
         shift
         ;;
         --overwrite-cache)
@@ -139,22 +140,9 @@ for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
     fi
 done
 
-OVERWRITE_ARGS=()
-if ! [ -z $OVERWRITE_CACHE ]; then
-    OVERWRITE_ARGS+=($OVERWRITE_CACHE)
-fi
-if ! [ -z $OVERWRITE_OUTPUT_DIR ]; then
-    OVERWRITE_ARGS+=($OVERWRITE_OUTPUT_DIR)
-fi
-
 DPT_EVAL_ARGS=()
 if ! [ -z $EVAL_CORPUS ]; then
     read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
-fi
-
-FP16_ARGS=""
-if ! [ -z $FP16 ]; then
-    FP16_ARGS="--fp16"
 fi
 
 # Directories
@@ -176,9 +164,8 @@ if ! [ -z $VERBOSE ]; then
     echo "FP16: $FP16"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
-    echo "POSITIONAL: $POSITIONAL"
-    echo "OVERWRITE: $OVERWRITE"
-    echo "OVERWRITE_ARGS: $OVERWRITE_ARGS"
+    echo "OVERWRITE_CACHE: $OVERWRITE_CACHE"
+    echo "OVERWRITE_OUTPUT_DIR: $OVERWRITE_OUTPUT_DIR"
     echo "SKIP_AUGMENT_VOCAB: $SKIP_AUGMENT_VOCAB"
     echo "SKIP_DOMAIN_PRE_TRAIN: $SKIP_DOMAIN_PRE_TRAIN"
     echo "SKIP_FINE_TUNING: $SKIP_FINE_TUNE"
@@ -200,7 +187,7 @@ else
         --bert-vocab $BERT_VOCAB \
         --corpus $CORPUS_ARGS \
         --dst $AUGMENTED_VOCAB_FOLDER \
-        ${OVERWRITE_ARGS[@]}
+        $OVERWRITE_CACHE
     if [ $? -ne 0 ]; then
         echo "Vocabulary augmentation failed. Halting pipeline."
         exit 1
@@ -218,7 +205,7 @@ else
     python -m scripts.domain_adaptation.domain_pre_train \
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
         --model_type bert \
-        --tokenizer_vocab $AUGMENTED_VOCAB_PATH \
+        --tokenizer_vocab "$AUGMENTED_VOCAB_FOLDER/vocab.txt" \
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
@@ -226,9 +213,10 @@ else
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
-        $FP16_ARGS \
+        $FP16 \
         ${DPT_EVAL_ARGS[@]} \
-        ${OVERWRITE_ARGS[@]}
+        $OVERWRITE_CACHE \
+        $OVERWRITE_OUTPUT_DIR
     if [ $? -ne 0 ]; then
         echo "Domain pre-training failed. Halting pipeline."
         exit 1
@@ -256,6 +244,7 @@ else
         --num_train_epochs $NUM_EPOCHS_NER \
         --do_eval \
         --do_predict \
-        $FP16_ARGS \
-        ${OVERWRITE_ARGS[@]}
+        --overwrite_cache \
+        $FP16 \
+        $OVERWRITE_OUTPUT_DIR
 fi
