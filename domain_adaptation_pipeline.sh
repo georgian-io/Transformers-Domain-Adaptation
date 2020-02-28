@@ -7,8 +7,12 @@ EPOCHS_DPT=1
 
 FP16=""
 
+SAVE_STEPS=2500
+SAVE_TOTAL_LIMIT=50
+
 OVERWRITE_CACHE=""
 OVERWRITE_OUTPUT_DIR=""
+SHOULD_CONTINUE=""
 
 IFS="="  # Change the internal field separator
 while [ $# -gt 0 ]; do
@@ -62,6 +66,16 @@ while [ $# -gt 0 ]; do
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
+        --save-steps)
+        SAVE_STEPS=$ARG2
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
+        --save-total-limit)
+        SAVE_TOTAL_LIMIT=$ARG2
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
         --fp16)
         FP16="--fp16"
         shift
@@ -72,6 +86,10 @@ while [ $# -gt 0 ]; do
         ;;
         --overwrite-output-dir)
         OVERWRITE_OUTPUT_DIR="--overwrite_output_dir"
+        shift
+        ;;
+        --should-continue)
+        SHOULD_CONTINUE="--should-continue"
         shift
         ;;
         --skip-augment-vocab)
@@ -140,6 +158,10 @@ for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
     fi
 done
 
+if ! [ -z $SHOULD_CONTINUE ]; then
+    OVERWRITE_OUTPUT_DIR="--overwrite_output_dir"
+fi
+
 DPT_EVAL_ARGS=()
 if ! [ -z $EVAL_CORPUS ]; then
     read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
@@ -164,6 +186,8 @@ if ! [ -z $VERBOSE ]; then
     echo "FP16: $FP16"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
+    echo "SAVE_STEPS: $SAVE_STEPS"
+    echo "SAVE_TOTAL_LIMIT: $SAVE_TOTAL_LIMIT"
     echo "OVERWRITE_CACHE: $OVERWRITE_CACHE"
     echo "OVERWRITE_OUTPUT_DIR: $OVERWRITE_OUTPUT_DIR"
     echo "SKIP_AUGMENT_VOCAB: $SKIP_AUGMENT_VOCAB"
@@ -213,8 +237,11 @@ else
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
+        --save_steps $SAVE_STEPS \
+        --save_total_limit $SAVE_TOTAL_LIMIT \
         $FP16 \
         ${DPT_EVAL_ARGS[@]} \
+        $SHOULD_CONTINUE \
         $OVERWRITE_CACHE \
         $OVERWRITE_OUTPUT_DIR
     if [ $? -ne 0 ]; then
@@ -244,6 +271,7 @@ else
         --num_train_epochs $NUM_EPOCHS_NER \
         --do_eval \
         --do_predict \
+        --save_steps $SAVE_STEPS \
         --overwrite_cache \
         $FP16 \
         $OVERWRITE_OUTPUT_DIR
