@@ -61,19 +61,20 @@ def truncate(tokenized: Union[List[str],
                        List[int],
                        List[List[int]]]:
     # Perform appropriate cleaning and checking of args
+    # `tokenized` has been stripped of possible special chars
     tokenized, max_length, keep, cls_token, sep_token = (
         _clean_args(tokenized, max_length, keep, cls_token, sep_token)
     )
 
     ret = []
     for _tokenized in tokenized:
-        if len(_tokenized) > max_length + 2:
+        if len(_tokenized) > max_length:
             if keep == 'first':
-                _truncated = _tokenized[:max_length]
+                _tokenized = _tokenized[:max_length]
             elif keep == 'last':
-                _truncated = _tokenized[-max_length:]
+                _tokenized = _tokenized[-max_length:]
             elif isinstance(keep, list):
-                _truncated = _tokenized[:keep[0]] + _tokenized[-keep[1]:]
-        ret.append([cls_token] + _truncated + [sep_token])
+                _tokenized = _tokenized[:keep[0]] + _tokenized[-keep[1]:]
+        ret.append([cls_token] + _tokenized + [sep_token])
 
     return ret if len(ret) > 1 else ret[0]
