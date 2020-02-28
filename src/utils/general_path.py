@@ -108,13 +108,11 @@ class GeneralPath:
     def download(self, dst: str) -> None:
         if self.is_file():
             Path(dst).parent.mkdir(parents=True, exist_ok=True)
-            return self.client.download(str(self.path), dst)
+            return self.client.download(str(self.path), str(dst))
         elif self.is_dir():
             raise NotImplementedError()
         else:
             raise FileNotFoundError('File does not exist')
-
-
 
 
 class S3Client:
