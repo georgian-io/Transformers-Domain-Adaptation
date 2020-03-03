@@ -307,7 +307,11 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
     else:
         train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
-        train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate
+        train_dataset,
+        sampler=train_sampler,
+        batch_size=args.train_batch_size,
+        collate_fn=collate,
+        num_workers=args.data_loader_num_workers
     )
 
     if args.ram_efficient and args.max_steps > 0:
@@ -510,7 +514,11 @@ def evaluate(args, model: PreTrainedModel, tokenizer: Tokenizer, prefix="") -> D
 
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, collate_fn=collate
+        eval_dataset,
+        sampler=eval_sampler,
+        batch_size=args.eval_batch_size,
+        collate_fn=collate,
+        num_workers=args.data_loader_num_workers
     )
 
     # multi-gpu evaluate
@@ -588,6 +596,12 @@ def main():
         "--ram_efficient",
         action="store_true",
         help="If provided, uses iterable version of datasets (only IterableTextDataset supported so far) to save on RAM.",
+    )
+    parser.add_argument(
+        "--data_loader_num_workers",
+        default=2,
+        type=int,
+        help="Number of workers to handle preprocessing of data.",
     )
     parser.add_argument(
         "--should_continue", action="store_true", help="Whether to continue from latest checkpoint in output_dir"
