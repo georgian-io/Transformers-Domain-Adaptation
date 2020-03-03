@@ -89,7 +89,7 @@ while [ $# -gt 0 ]; do
         shift
         ;;
         --should-continue)
-        SHOULD_CONTINUE="--should-continue"
+        SHOULD_CONTINUE="--should_continue"
         shift
         ;;
         --skip-augment-vocab)
