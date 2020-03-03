@@ -254,6 +254,7 @@ else
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
         --model_type bert \
         --tokenizer_vocab $TOKENIZER_VOCAB \
+        --model_name_or_path 'bert-base-uncased' \
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
