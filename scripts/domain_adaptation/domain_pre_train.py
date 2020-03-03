@@ -28,18 +28,27 @@ import pickle
 import random
 import re
 import shutil
+import itertools as it
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
+from torch.utils.data import (
+    DataLoader,
+    Dataset,
+    IterableDataset,
+    RandomSampler,
+    SequentialSampler,
+    get_worker_info
+)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from tokenizers import BertWordPieceTokenizer, Tokenizer
 from src.tokenizer import truncate
+from src.utils.iter import batch
 
 from transformers import (
     WEIGHTS_NAME,
@@ -133,6 +142,40 @@ class TextDataset(Dataset):
         return torch.tensor(self.examples[item], dtype=torch.long)
 
 
+class IterableTextDataset(IterableDataset):
+    def __init__(self, tokenizer: Tokenizer, file_paths: str, block_size=512, chunk_size=1024**2):
+        assert all([os.path.isfile(file_path) for file_path in file_paths])
+        self.file_paths = file_paths
+        self.tokenizer = tokenizer
+        self.block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
+        self.chunk_size = chunk_size
+
+    def __iter__(self):
+        lines = it.chain.from_iterable(Path(x)
+                                       .read_text(encoding="utf-8")
+                                       .splitlines()
+                                       for x in self.file_paths)
+
+        # Split data when there are multiple workers running in parallel
+        worker_info = get_worker_info()
+        if worker_info is not None:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+            lines = it.islice(lines, worker_id, None, num_workers)
+
+        chunks = batch(lines, self.chunk_size)
+        tokenized_chunks = (t
+                            for chunk in chunks
+                            for tokens in self.tokenizer.encode_batch(list(chunk))
+                            for t in tokens.ids[1:-1])
+        blocks = (list(x) for x in batch(tokenized_chunks, self.block_size))
+
+        # Add class and separation tokens to each block
+        cls_token, sep_token = self.tokenizer.encode('').ids
+        blocks_with_special_tokens = ([cls_token] + block + [sep_token] for block in blocks)
+        return (torch.tensor(x, dtype=torch.long) for x in blocks_with_special_tokens)
+
+
 class LineByLineTextDataset(Dataset):
     def __init__(self, tokenizer: Tokenizer, args, file_paths: str, block_size=512):
         assert all([os.path.isfile(file_path) for file_path in file_paths])
@@ -159,8 +202,12 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     file_paths = args.eval_data_file if evaluate else args.train_data_file
     # Use Rust-based tokenizers temporarily
     rust_tokenizer = BertWordPieceTokenizer(args.tokenizer_vocab)
-    if args.line_by_line:
+    if args.line_by_line and args.ram_efficient:
+        raise NotImplementedError()
+    elif args.line_by_line:
         return LineByLineTextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
+    elif args.ram_efficient:
+        return IterableTextDataset(rust_tokenizer, file_paths=file_paths, block_size=args.block_size)
     else:
         return TextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
 
@@ -255,12 +302,18 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
             return pad_sequence(examples, batch_first=True)
         return pad_sequence(examples, batch_first=True, padding_value=tokenizer.pad_token_id)
 
-    train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
+    if args.ram_efficient:
+        train_sampler = None
+    else:
+        train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
     train_dataloader = DataLoader(
         train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, collate_fn=collate
     )
 
-    if args.max_steps > 0:
+    if args.ram_efficient and args.max_steps > 0:
+        t_total = args.max_steps
+        args.num_train_epochs = 1
+    elif args.max_steps > 0:
         t_total = args.max_steps
         args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
     else:
@@ -309,7 +362,8 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
 
     # Train!
     logger.info("***** Running training *****")
-    logger.info("  Num examples = %d", len(train_dataset))
+    if not args.ram_efficient:
+        logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
     logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
     logger.info(
@@ -330,8 +384,12 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
             # set global_step to gobal_step of last saved checkpoint from model path
             checkpoint_suffix = args.model_name_or_path.split("-")[-1].split("/")[0]
             global_step = int(checkpoint_suffix)
-            epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
-            steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
+            if args.ram_efficient:
+                epochs_trained = 0
+                steps_trained_in_current_epoch = global_step
+            else:
+                epochs_trained = global_step // (len(train_dataloader) // args.gradient_accumulation_steps)
+                steps_trained_in_current_epoch = global_step % (len(train_dataloader) // args.gradient_accumulation_steps)
 
             logger.info("  Continuing training from checkpoint, will skip to saved global_step")
             logger.info("  Continuing training from epoch %d", epochs_trained)
@@ -461,7 +519,8 @@ def evaluate(args, model: PreTrainedModel, tokenizer: Tokenizer, prefix="") -> D
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
-    logger.info("  Num examples = %d", len(eval_dataset))
+    if not args.ram_efficient:
+        logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
     nb_eval_steps = 0
@@ -524,6 +583,11 @@ def main():
         "--line_by_line",
         action="store_true",
         help="Whether distinct lines of text in the dataset are to be handled as distinct sequences.",
+    )
+    parser.add_argument(
+        "--ram_efficient",
+        action="store_true",
+        help="If provided, uses iterable version of datasets (only IterableTextDataset supported so far) to save on RAM.",
     )
     parser.add_argument(
         "--should_continue", action="store_true", help="Whether to continue from latest checkpoint in output_dir"
@@ -667,6 +731,8 @@ def main():
                 args.output_dir
             )
         )
+    if args.ram_efficient and args.max_steps == -1:
+        raise ValueError('--max_steps must be specified when using --ram-efficent.')
 
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
