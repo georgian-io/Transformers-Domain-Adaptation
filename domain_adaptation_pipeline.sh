@@ -4,6 +4,7 @@ POSITIONAL=()
 BERT_VOCAB="bert-base-uncased-vocab.txt"
 BATCH_SIZE=4
 EPOCHS_DPT=1
+MAX_STEPS=-1
 
 FP16=""
 
@@ -58,6 +59,11 @@ while [ $# -gt 0 ]; do
         ;;
         --epochs-dpt)
         EPOCHS_DPT=$ARG2
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
+        --max-steps)
+        MAX_STEPS=$ARG2
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
@@ -185,6 +191,7 @@ if ! [ -z $VERBOSE ]; then
     echo "BATCH_SIZE: $BATCH_SIZE"
     echo "FP16: $FP16"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
+    echo "MAX_STEPS: $MAX_STEPS"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
     echo "SAVE_STEPS: $SAVE_STEPS"
     echo "SAVE_TOTAL_LIMIT: $SAVE_TOTAL_LIMIT"
@@ -233,6 +240,7 @@ else
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
+        --max_steps $MAX_STEPS \
         --train_data_file $CORPUS_ARGS \
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
