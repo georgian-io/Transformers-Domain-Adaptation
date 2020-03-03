@@ -143,6 +143,10 @@ if [[ -z $FINE_TUNE_DATA_DIR && ! $SKIP_FINE_TUNE = "TRUE" ]]; then
     exit 1
 fi
 
+# Directories
+AUGMENTED_VOCAB_FOLDER="$OUTPUT_DIR/augmented-vocab"
+DOMAIN_PRE_TRAIN_FOLDER="$OUTPUT_DIR/domain-pre-trained"
+FINE_TUNE_FOLDER="$OUTPUT_DIR/fine-tuned"
 
 # Create intermediary args for use in scripts
 # 1. Expand $CORPUS to all child text files
@@ -173,10 +177,16 @@ if ! [ -z $EVAL_CORPUS ]; then
     read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
 fi
 
-# Directories
-AUGMENTED_VOCAB_FOLDER="$OUTPUT_DIR/augmented-vocab"
-DOMAIN_PRE_TRAIN_FOLDER="$OUTPUT_DIR/domain-pre-trained"
-FINE_TUNE_FOLDER="$OUTPUT_DIR/fine-tuned"
+TOKENIZER_VOCAB=""
+if [ -z $SKIP_AUGMENT_VOCAB ]; then
+    TOKENIZER_VOCAB="$AUGMENTED_VOCAB_FOLDER/vocab.txt"
+else
+    AUGMENTED_VOCAB_FOLDER="$OUTPUT_DIR/vocab"
+    TOKENIZER_VOCAB="$AUGMENTED_VOCAB_FOLDER/vocab.txt"
+    mkdir -p $AUGMENTED_VOCAB_FOLDER
+    cp "bert-base-uncased-vocab.txt" $TOKENIZER_VOCAB
+fi
+
 
 # If --verbose is provided, print all parameters
 if ! [ -z $VERBOSE ]; then
@@ -192,6 +202,7 @@ if ! [ -z $VERBOSE ]; then
     echo "FP16: $FP16"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "MAX_STEPS: $MAX_STEPS"
+    echo "TOKENIZER_VOCAB: $TOKENIZER_VOCAB"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
     echo "SAVE_STEPS: $SAVE_STEPS"
     echo "SAVE_TOTAL_LIMIT: $SAVE_TOTAL_LIMIT"
@@ -236,7 +247,7 @@ else
     python -m scripts.domain_adaptation.domain_pre_train \
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
         --model_type bert \
-        --tokenizer_vocab "$AUGMENTED_VOCAB_FOLDER/vocab.txt" \
+        --tokenizer_vocab $TOKENIZER_VOCAB \
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
