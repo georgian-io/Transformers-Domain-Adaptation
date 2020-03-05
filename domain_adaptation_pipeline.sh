@@ -5,6 +5,8 @@ BERT_VOCAB="bert-base-uncased-vocab.txt"
 BATCH_SIZE=4
 EPOCHS_DPT=1
 MAX_STEPS=-1
+LEARNING_RATE=5e-5
+WARMUP_STEPS=0
 
 FP16=""
 RAM_EFFICIENT=""
@@ -53,6 +55,11 @@ while [ $# -gt 0 ]; do
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
+        --learning-rate)
+        LEARNING_RATE="$ARG2"
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
         -b|--batch-size)
         BATCH_SIZE=$ARG2
         shift;
@@ -60,6 +67,11 @@ while [ $# -gt 0 ]; do
         ;;
         --epochs-dpt)
         EPOCHS_DPT=$ARG2
+        shift;
+        if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
+        ;;
+        --warmup-steps)
+        WARMUP_STEPS=$ARG2
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
         ;;
@@ -203,11 +215,13 @@ if ! [ -z $VERBOSE ]; then
     echo "FINE_TUNE_TEXT: $FINE_TUNE_TEXT"
     echo "CORPUS_ARGS: $CORPUS_ARGS"
     echo "BERT_VOCAB: $BERT_VOCAB"
+    echo "LEARNING_RATE: $LEARNING_RATE"
     echo "BATCH_SIZE: $BATCH_SIZE"
     echo "FP16: $FP16"
     echo "RAM_EFFICIENT: $RAM_EFFICIENT"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "MAX_STEPS: $MAX_STEPS"
+    echo "WARMUP_STEPS: $WARMUP_STEPS"
     echo "TOKENIZER_VOCAB: $TOKENIZER_VOCAB"
     echo "FINE_TUNE_DATA_DIR: $FINE_TUNE_DATA_DIR"
     echo "SAVE_STEPS: $SAVE_STEPS"
@@ -258,8 +272,10 @@ else
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
+        --warmup_steps $WARMUP_STEPS \
         --max_steps $MAX_STEPS \
         --train_data_file $CORPUS_ARGS \
+        --learning_rate $LEARNING_RATE \
         --per_gpu_train_batch_size $BATCH_SIZE \
         --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
