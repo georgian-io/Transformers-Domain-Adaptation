@@ -19,10 +19,10 @@ tmux send-keys "pip install -r requirements.txt" C-m
 tmux send-keys "git clone https://github.com/NVIDIA/apex" C-m
 tmux send-keys "cd apex" C-m
 tmux send-keys "pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./" C-m
-tmux send-keys "cd ~/SageMaker/NLP-Domain-Adaptation"
+tmux send-keys "cd ~/SageMaker/NLP-Domain-Adaptation" C-m
 
 # Second window for htop
-tmux split-window -h
+tmux split-window -v
 tmux send-keys "sudo yum install htop -y" C-m
 tmux send-keys "htop" C-m
 
