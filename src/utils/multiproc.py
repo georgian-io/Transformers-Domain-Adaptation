@@ -11,6 +11,8 @@ def parallelize(func,
                 n_workers: Optional[int] = None,
                 desc: Optional[str] = None,
                 chunksize: Optional[int] = None,
+                async_ok: bool = False,
+                leave: bool = True,
                 **func_kwargs,
                ):
     workers = (cpu_count() - 1) if n_workers is None else n_workers
@@ -19,6 +21,7 @@ def parallelize(func,
     func = partial(func, **func_kwargs)
 
     with Pool(workers) as p:
-        return list(tqdm(p.imap(func, iterable, chunksize=chunksize),
-                         desc=desc, dynamic_ncols=True,
+        imap_func = p.imap_unordered if async_ok else p.imap
+        return list(tqdm(imap_func(func, iterable, chunksize=chunksize),
+                         desc=desc, dynamic_ncols=True, leave=leave,
                          total=total))
