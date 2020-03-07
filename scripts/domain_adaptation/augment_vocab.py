@@ -9,6 +9,7 @@ from typing import List, Union, Optional
 import nltk
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tokenizers import BertWordPieceTokenizer
 
@@ -46,7 +47,7 @@ def parse_args():
                         help='If provided, train tokenizer vocabulary from '
                              'scratch.')
     parser.add_argument('-t', '--tokenization-batch-size',
-                        type=int, default=1024*2,
+                        type=int, default=2**11,
                         help='Number of lines to tokenize each time. '
                              'Larger values lead to time savings at the '
                              'expense of larger memory requirements.')
@@ -143,16 +144,12 @@ def fused_tokenize_and_rank(corpora: List[str],
     lines = it.chain.from_iterable(read_text_with_logging(c)
                                    for c in corpora)
     batches = batch(lines, batch_size)
-    tokenized_batches = (
-        tokens.ids[1:-1]
+    tokenized_batches = it.chain.from_iterable(
+        tokens.tokens[1:-1]
         for batch in batches
         for tokens in tokenizer.encode_batch(list(batch))
     )
-    counters = (Counter(x) for x in tokenized_batches)
-
-    # Get last element which contains the accumulated counts over all counters
-    *_, counts = it.accumulate(counters)
-
+    counts = Counter(tqdm(tokenized_batches, desc='Counting tokens'))
     ranked_tokens = [token for token, _ in counts.most_common()]
     return ranked_tokens
 
