@@ -28,6 +28,7 @@ import pickle
 import random
 import re
 import shutil
+import itertools as it
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -40,6 +41,7 @@ from tqdm import tqdm, trange
 
 from tokenizers import BertWordPieceTokenizer, Tokenizer
 from src.tokenizer import truncate
+from src.utils.iter import batch
 
 from transformers import (
     WEIGHTS_NAME,
@@ -87,8 +89,17 @@ MODEL_CLASSES = {
 }
 
 
+def read_text_with_logging(p: str) -> List[str]:
+    logger.info(f'Reading text from {p}')
+    return Path(p).read_text(encoding="utf-8").splitlines()
+
+
 class TextDataset(Dataset):
-    def __init__(self, tokenizer: Tokenizer, args, file_paths: str, block_size=512):
+    def __init__(self,
+                 tokenizer: Tokenizer,
+                 args,
+                 file_paths: List[str],
+                 block_size: int = 512):
         assert all([os.path.isfile(file_path) for file_path in file_paths])
 
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
@@ -105,7 +116,7 @@ class TextDataset(Dataset):
         else:
             logger.info("Reading dataset at %s", file_paths)
 
-            lines = it.chain.from_iterable(read_text_with_logging(p) for p in args.src)
+            lines = it.chain.from_iterable(read_text_with_logging(p) for p in file_paths)
             chunks = batch(lines, args.chunk_size)
             tokenized = it.chain.from_iterable(
                 encodings.ids[1:-1]
@@ -528,6 +539,12 @@ def main():
         "--line_by_line",
         action="store_true",
         help="Whether distinct lines of text in the dataset are to be handled as distinct sequences.",
+    )
+    parser.add_argument(
+        '--chunk_size',
+        type=int,
+        default=2**10,
+        help='Number of lines to tokenize at once during dataset setup step.'
     )
     parser.add_argument(
         "--data_loader_num_workers",
