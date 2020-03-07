@@ -113,22 +113,18 @@ class TextDataset(Dataset):
                 self.examples = pickle.load(handle)
         else:
             logger.info("Reading dataset at %s", file_paths)
-            text = []
-            for file_path in file_paths:
-                with open(file_path, encoding="utf-8") as f:
-                    text += f.readlines()
 
-            logger.info("Creating features from dataset file at %s", directory)
-            # Get all token IDs except [CLS] and [SEP] and flat map IDs
-            tokenized_text = [t for tokenized in tokenizer.encode_batch(text) for t in tokenized.ids[1:-1]]
+            lines = it.chain.from_iterable(read_text_with_logging(p) for p in args.src)
+            chunks = batch(lines, args.chunk_size)
+            tokenized = it.chain.from_iterable(
+                encodings.ids[1:-1]
+                for chunk in chunks
+                for encodings in tokenizer.encode_batch(list(chunk))
+            )
+
             cls_token, sep_token = tokenizer.encode('').ids
-
-            self.examples = []
-            for i in range(0, len(tokenized_text) - block_size + 1, block_size):  # Truncate in block of block_size
-                self.examples.append([cls_token] + tokenized_text[i : i + block_size] + [sep_token])
-            # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
-            # If your dataset is small, first you should loook for a bigger one :-) and second you
-            # can change this behavior by adding (model specific) padding.
+            blocks = ([cls_token] + list(block) + [sep_token] for block in batch(tokenized, args.block_size))
+            self.examples = tuple(tqdm(blocks, desc='Tokenizing text'))
 
             logger.info("Saving features into cached file %s", cached_features_file)
             Path(cached_features_file).parent.mkdir(exist_ok=True, parents=True)
