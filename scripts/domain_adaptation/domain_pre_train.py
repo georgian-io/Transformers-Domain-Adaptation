@@ -24,7 +24,6 @@ import argparse
 import glob
 import logging
 import os
-import pickle
 import random
 import re
 import shutil
@@ -105,12 +104,12 @@ class TextDataset(Dataset):
 
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
-        cached_features_file = Path(args.output_dir).with_name('tokenized_corpus.pkl')
+        cached_features_file = Path(args.output_dir).with_name('tokenized_corpus.pt')
 
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
             logger.info("Loading features from cached file %s", cached_features_file)
-            with open(cached_features_file, "rb") as handle:
-                self.examples = pickle.load(handle)
+            # Use `torch.load` for faster cache loading
+            self.examples = torch.load(cached_features_file)
         else:
             logger.info("Reading dataset at %s", file_paths)
 
@@ -158,8 +157,9 @@ class TextDataset(Dataset):
 
             logger.info("Saving features into cached file %s", cached_features_file)
             Path(cached_features_file).parent.mkdir(exist_ok=True, parents=True)
-            with open(cached_features_file, "wb") as handle:
-                pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            # Use `torch.save` to avoid MemoryError when saving large torch tensor
+            torch.save(self.examples, cached_features_file)
 
     def __len__(self):
         return len(self.examples)
