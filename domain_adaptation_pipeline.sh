@@ -260,9 +260,9 @@ else
     echo "********************************************************"
     python -m scripts.domain_adaptation.domain_pre_train \
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
-        --model_type bert \
+        --model_type "bert" \
         --tokenizer_vocab $TOKENIZER_VOCAB \
-        --model_name_or_path 'bert-base-uncased' \
+        --model_name_or_path "bert-base-uncased" \
         --block_size 512 \
         --do_train \
         --num_train_epochs $EPOCHS_DPT \
@@ -299,7 +299,7 @@ else
         --labels "$FINE_TUNE_DATA_DIR/labels.txt" \
         --suffix ".tsv" \
         --output_dir $FINE_TUNE_FOLDER \
-        --model_type bert \
+        --model_type "bert" \
         --model_name_or_path $DOMAIN_PRE_TRAIN_FOLDER \
         --do_lower_case \
         --max_seq_length $MAX_LENGTH \
