@@ -148,7 +148,7 @@ class TextDataset(Dataset):
 
             # Convert to tensor to drastically reduce memory requirements
             tensors: Iterable[torch.Tensor] = (
-                torch.tensor(block, dtype=torch.long)
+                torch.tensor(block, dtype=args.cache_dtype)
                 for block in blocks
             )
 
@@ -398,6 +398,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
                 steps_trained_in_current_epoch -= 1
                 continue
 
+            batch = batch.type(torch.long)
             inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
             inputs = inputs.to(args.device)
             labels = labels.to(args.device)
@@ -759,6 +760,14 @@ def main():
         bool(args.local_rank != -1),
         args.fp16,
     )
+
+    # Select appropriate cache dtype when saving cached dataset
+    if len(Path(args.tokenizer_vocab).read_text(encoding="utf-8").splitlines()) < 2**15:
+        logger.info('Vocabulary does not exceed "short" integer limit. Using `torch.short` when tokenizing corpus')
+        args.cache_dtype = torch.short
+    else:
+        logger.info('Large vocabulary detected. Using `torch.int` when tokenizign corpus')
+        args.cache_dtype = torch.int
 
     # Set seed
     set_seed(args)
