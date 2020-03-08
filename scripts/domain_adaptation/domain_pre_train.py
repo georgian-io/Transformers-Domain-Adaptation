@@ -105,10 +105,7 @@ class TextDataset(Dataset):
 
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
-        directory, filename = os.path.split(file_paths[0])
-        cached_features_file = os.path.join(
-            directory, args.model_type + "_cached_lm_" + str(block_size) + "_" + Path(filename).stem
-        )
+        cached_features_file = Path(args.output_dir).with_name('tokenized_corpus.pkl')
 
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
             logger.info("Loading features from cached file %s", cached_features_file)
