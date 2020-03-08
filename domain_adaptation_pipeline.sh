@@ -9,7 +9,6 @@ LEARNING_RATE=5e-5
 WARMUP_STEPS=0
 
 FP16=""
-RAM_EFFICIENT=""
 
 SAVE_STEPS=2500
 SAVE_TOTAL_LIMIT=50
@@ -94,10 +93,6 @@ while [ $# -gt 0 ]; do
         SAVE_TOTAL_LIMIT=$ARG2
         shift;
         if [ $EXTRA_SHIFT = "TRUE" ]; then shift; fi
-        ;;
-        --ram-efficient)
-        RAM_EFFICIENT="--ram_efficient"
-        shift;
         ;;
         --fp16)
         FP16="--fp16"
@@ -218,7 +213,6 @@ if ! [ -z $VERBOSE ]; then
     echo "LEARNING_RATE: $LEARNING_RATE"
     echo "BATCH_SIZE: $BATCH_SIZE"
     echo "FP16: $FP16"
-    echo "RAM_EFFICIENT: $RAM_EFFICIENT"
     echo "EPOCHS_DPT: $EPOCHS_DPT"
     echo "MAX_STEPS: $MAX_STEPS"
     echo "WARMUP_STEPS: $WARMUP_STEPS"
@@ -282,7 +276,6 @@ else
         --save_steps $SAVE_STEPS \
         --save_total_limit $SAVE_TOTAL_LIMIT \
         $FP16 \
-        $RAM_EFFICIENT \
         ${DPT_EVAL_ARGS[@]} \
         $SHOULD_CONTINUE \
         $OVERWRITE_CACHE \
