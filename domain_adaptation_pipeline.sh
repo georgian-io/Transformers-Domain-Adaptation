@@ -190,7 +190,7 @@ if ! [ -z $EVAL_CORPUS ]; then
 fi
 
 TOKENIZER_VOCAB=""
-if [ -z $SKIP_AUGMENT_VOCAB ]; then
+if [[ -z $SKIP_AUGMENT_VOCAB || ( -e "$AUGMENTED_VOCAB_FOLDER/vocab.txt" ) ]]; then
     TOKENIZER_VOCAB="$AUGMENTED_VOCAB_FOLDER/vocab.txt"
 else
     AUGMENTED_VOCAB_FOLDER="$OUTPUT_DIR/vocab"
