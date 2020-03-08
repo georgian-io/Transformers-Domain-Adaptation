@@ -4,7 +4,7 @@ import argparse
 import itertools as it
 from pathlib import Path
 from collections import Counter
-from typing import List, Union, Optional
+from typing import List, Tuple, Iterable, Union, Optional
 
 import nltk
 import numpy as np
@@ -141,15 +141,15 @@ def fused_tokenize_and_rank(corpora: List[str],
         logger.info(f'Loading text from {corpus}')
         return Path(corpus).read_text(encoding="utf-8").splitlines()
 
-    lines = it.chain.from_iterable(read_text_with_logging(c)
-                                   for c in corpora)
-    batches = batch(lines, batch_size)
-    tokenized_batches = it.chain.from_iterable(
+    lines: Iterable[str] = it.chain.from_iterable(read_text_with_logging(c)
+                                                  for c in corpora)
+    batches: Iterable[Tuple[str]] = batch(lines, batch_size)
+    token_ids: Iterable[int] = it.chain.from_iterable(
         tokens.tokens[1:-1]
         for batch in batches
         for tokens in tokenizer.encode_batch(list(batch))
     )
-    counts = Counter(tqdm(tokenized_batches, desc='Counting tokens'))
+    counts = Counter(tqdm(token_ids, desc='Counting tokens'))
     ranked_tokens = [token for token, _ in counts.most_common()]
     return ranked_tokens
 

@@ -169,7 +169,7 @@ class TextDataset(Dataset):
 
 
 class LineByLineTextDataset(Dataset):
-    def __init__(self, tokenizer: Tokenizer, args, file_paths: str, block_size=512):
+    def __init__(self, tokenizer: Tokenizer, args, file_paths: List[str], block_size=512):
         assert all([os.path.isfile(file_path) for file_path in file_paths])
         # Here, we do not cache the features, operating under the assumption
         # that we will soon use fast multithreaded tokenizers from the
