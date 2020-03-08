@@ -30,7 +30,7 @@ import re
 import shutil
 import itertools as it
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Iterable
 
 import numpy as np
 import torch
@@ -41,7 +41,8 @@ from tqdm import tqdm, trange
 
 from tokenizers import BertWordPieceTokenizer, Tokenizer
 from src.tokenizer import truncate
-from src.utils.iter import batch
+from src.utils.iter import batch as batch_iters
+from src.utils.multiproc import parallelize
 
 from transformers import (
     WEIGHTS_NAME,
@@ -116,17 +117,47 @@ class TextDataset(Dataset):
         else:
             logger.info("Reading dataset at %s", file_paths)
 
-            lines = it.chain.from_iterable(read_text_with_logging(p) for p in file_paths)
-            chunks = batch(lines, args.chunk_size)
-            tokenized = it.chain.from_iterable(
-                encodings.ids[1:-1]
-                for chunk in chunks
-                for encodings in tokenizer.encode_batch(list(chunk))
+            # This part is not very memory-efficient but reduces I/O bottleneck significantly
+            text_chunks: Iterable[List[str]] = it.chain.from_iterable(
+                parallelize(read_text_with_logging, filepath_batch,
+                            leave=False, async_ok=True)
+                for filepath_batch in batch_iters(file_paths, args.chunk_size)
             )
 
+            # Tokenize in parallel using Rust tokenizer
+            tokenized: Iterable[int] = it.chain.from_iterable(
+                encodings.ids[1:-1]
+                for chunk in text_chunks
+                for encodings in tokenizer.encode_batch(chunk)
+            )
+
+            # Rebatch tokens to be of length `block_size`
             cls_token, sep_token = tokenizer.encode('').ids
-            blocks = ([cls_token] + list(block) + [sep_token] for block in batch(tokenized, args.block_size))
-            self.examples = tuple(tqdm(blocks, desc='Tokenizing text'))
+            blocks: Iterable[List[int]] = (
+                [cls_token] + list(block) + [sep_token]
+                for block in batch_iters(tokenized, block_size)
+            )
+
+            # Pad last block
+            blocks: Iterable[List[int]] = (
+                # Padding for the last row has to be applied here for
+                # memory efficiency when saving contiguous torch tensor
+                # downstream — otherwise memory of `self.examples`
+                # (as a list of torch.Tensor) is not properly released
+                block
+                if len(block) == block_size + 2 else
+                np.pad(list(block), (0, block_size + 2 - len(block)), mode='constant').tolist()
+                for block in blocks
+            )
+
+            # Convert to tensor to drastically reduce memory requirements
+            tensors: Iterable[torch.Tensor] = (
+                torch.tensor(block, dtype=torch.long)
+                for block in blocks
+            )
+
+            # Combine all examples to form a contiguous torch tensor
+            self.examples = torch.stack(tuple(tqdm(tensors, desc='Tokenizing text')))
 
             logger.info("Saving features into cached file %s", cached_features_file)
             Path(cached_features_file).parent.mkdir(exist_ok=True, parents=True)
@@ -137,7 +168,7 @@ class TextDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, item):
-        return torch.tensor(self.examples[item], dtype=torch.long)
+        return self.examples[item]
 
 
 class LineByLineTextDataset(Dataset):
@@ -543,8 +574,10 @@ def main():
     parser.add_argument(
         '--chunk_size',
         type=int,
-        default=2**10,
-        help='Number of lines to tokenize at once during dataset setup step.'
+        default=4,
+        help='Number of files to tokenize concurrently during dataset setup. '
+             'Larger chunks generally lead to shorter processing time, '
+             'but require larger CPU memory.'
     )
     parser.add_argument(
         "--data_loader_num_workers",
