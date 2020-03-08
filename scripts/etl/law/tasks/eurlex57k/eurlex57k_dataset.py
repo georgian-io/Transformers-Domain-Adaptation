@@ -1,5 +1,6 @@
 """Class definition for Eurlex57k Dataset"""
 from typing import Tuple
+import unicodedata
 
 import pandas as pd
 import torch
@@ -37,7 +38,14 @@ class Eurlex57kDataset(Dataset):
         df['main_body_original'] = df['main_body']
         df['main_body'] = df['main_body'].apply(lambda x: '\n'.join(x))
 
-        self.texts = df[TEXT_COLS].apply(lambda x: ' '.join(x), axis=1)
+        self.texts = (
+            df[TEXT_COLS]
+            .apply(lambda x: ' '.join(x), axis=1)
+            .apply(lambda x: unicodedata
+                             .normalize('NFKD', x)
+                             .encode('ascii', 'ignore')
+                             .decode("utf-8"))
+        )
         self.examples = (
             [truncate(enc.ids)
              for enc in tokenizer.encode_batch(self.texts.tolist())]
