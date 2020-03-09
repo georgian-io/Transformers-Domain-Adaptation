@@ -133,6 +133,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 set -- "${POSITIONAL[@]}"  # Restore positional parameters
+IFS=" "  # Reset IFS
 
 # TODO Error out on new args
 
@@ -174,19 +175,20 @@ elif [ -d $CORPUS ]; then
         fi
     done
 fi
-for VAR in $EVAL_CORPUS $FINE_TUNE_TEXT; do
-    if ! [ -z $VAR ]; then
-        CORPUS_ARGS="$CORPUS_ARGS,$VAR"
-    fi
-done
+if ! [ -z $FINE_TUNE_TEXT ]; then
+    CORPUS_ARGS="$CORPUS_ARGS,$FINE_TUNE_TEXT"
+fi
 
 if ! [ -z $SHOULD_CONTINUE ]; then
     OVERWRITE_OUTPUT_DIR="--overwrite_output_dir"
 fi
 
-DPT_EVAL_ARGS=()
+EVAL_CORPUS_ARGS=()
 if ! [ -z $EVAL_CORPUS ]; then
-    read -ra DPT_EVAL_ARGS <<< "--do eval --eval_data_file $EVAL_CORPUS"
+    # read -r EVAL_CORPUS_ARGS <<< "--do_eval --eval_data_file $EVAL_CORPUS"  # TODO Figure out
+    EVAL_CORPUS_ARGS+=("--do_eval")
+    EVAL_CORPUS_ARGS+=("--eval_data_file")
+    EVAL_CORPUS_ARGS+=($EVAL_CORPUS)
 fi
 
 TOKENIZER_VOCAB=""
@@ -271,12 +273,14 @@ else
         --train_data_file $CORPUS_ARGS \
         --learning_rate $LEARNING_RATE \
         --per_gpu_train_batch_size $BATCH_SIZE \
-        --per_gpu_eval_batch_size $BATCH_SIZE \
         --mlm \
         --save_steps $SAVE_STEPS \
         --save_total_limit $SAVE_TOTAL_LIMIT \
+        --evaluate_during_training \
+        --eval_all_checkpoints \
+        --per_gpu_eval_batch_size $BATCH_SIZE \
         $FP16 \
-        ${DPT_EVAL_ARGS[@]} \
+        ${EVAL_CORPUS_ARGS[@]} \
         $SHOULD_CONTINUE \
         $OVERWRITE_CACHE \
         $OVERWRITE_OUTPUT_DIR
@@ -306,8 +310,10 @@ else
         --do_train \
         --num_train_epochs $NUM_EPOCHS_NER \
         --do_eval \
+        --eval_all_checkpoints \
+        --evaluate_during_training \
         --do_predict \
-        --save_steps $SAVE_STEPS \
+        --save_steps 1000 \
         --overwrite_cache \
         $FP16 \
         $OVERWRITE_OUTPUT_DIR
