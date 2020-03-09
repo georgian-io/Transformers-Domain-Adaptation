@@ -99,12 +99,16 @@ class TextDataset(Dataset):
                  tokenizer: Tokenizer,
                  args,
                  file_paths: List[str],
-                 block_size: int = 512):
+                 block_size: int = 512,
+                 evaluate: bool = False):
         assert all([os.path.isfile(file_path) for file_path in file_paths])
 
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
-        cached_features_file = Path(args.output_dir).with_name('tokenized_corpus.pt')
+        cached_features_file = (
+            Path(args.output_dir)
+            / ('corpus_cache.pt' if not evaluate else 'eval_corpus_cache.pt')
+        )
 
         if os.path.exists(cached_features_file) and not args.overwrite_cache:
             logger.info("Loading features from cached file %s", cached_features_file)
@@ -195,9 +199,14 @@ def load_and_cache_examples(args, tokenizer, evaluate=False):
     # Use Rust-based tokenizers temporarily
     rust_tokenizer = BertWordPieceTokenizer(args.tokenizer_vocab)
     if args.line_by_line:
-        return LineByLineTextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
+        return LineByLineTextDataset(rust_tokenizer, args,
+                                     file_paths=file_paths,
+                                     block_size=args.block_size)
     else:
-        return TextDataset(rust_tokenizer, args, file_paths=file_paths, block_size=args.block_size)
+        return TextDataset(rust_tokenizer, args,
+                           file_paths=file_paths,
+                           block_size=args.block_size,
+                           evaluate=evaluate)
 
 
 def set_seed(args):

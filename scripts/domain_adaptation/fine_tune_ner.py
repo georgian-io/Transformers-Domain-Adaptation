@@ -344,8 +344,9 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
 
     # Load data features from cache or dataset file
     cached_features_file = os.path.join(
-        args.data_dir,
-        "cached_{}_{}_{}".format(
+        args.output_dir,
+        "cache",
+        "{}_{}_{}".format(
             mode, list(filter(None, args.model_name_or_path.split("/"))).pop(), str(args.max_seq_length)
         ),
     )
