@@ -290,7 +290,7 @@ def mask_tokens(inputs: torch.Tensor, tokenizer: Tokenizer, args) -> Tuple[torch
 def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> Tuple[int, float]:
     """ Train the model """
     if args.local_rank in [-1, 0]:
-        tb_writer = SummaryWriter()
+        tb_writer = SummaryWriter(os.path.join(args.output_dir, "runs"))
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
 
