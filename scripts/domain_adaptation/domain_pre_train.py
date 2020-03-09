@@ -101,8 +101,6 @@ class TextDataset(Dataset):
                  file_paths: List[str],
                  block_size: int = 512,
                  evaluate: bool = False):
-        assert all([os.path.isfile(file_path) for file_path in file_paths])
-
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
         cached_features_file = (
@@ -115,6 +113,8 @@ class TextDataset(Dataset):
             # Use `torch.load` for faster cache loading
             self.examples = torch.load(cached_features_file)
         else:
+            assert all([os.path.isfile(file_path) for file_path in file_paths])
+
             logger.info("Reading dataset at %s", file_paths)
 
             # This part is not very memory-efficient but reduces I/O bottleneck significantly
