@@ -521,6 +521,7 @@ def evaluate(args, model: PreTrainedModel, tokenizer: Tokenizer, prefix="") -> D
     model.eval()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
+        batch = batch.type(torch.long)
         inputs, labels = mask_tokens(batch, tokenizer, args) if args.mlm else (batch, batch)
         inputs = inputs.to(args.device)
         labels = labels.to(args.device)
@@ -570,7 +571,7 @@ def main():
     parser.add_argument(
         "--eval_data_file",
         default=None,
-        type=str,
+        type=lambda x: x.split(','),
         help="An optional input evaluation data file to evaluate the perplexity on (a text file).",
     )
     parser.add_argument(

@@ -377,6 +377,7 @@ def load_and_cache_examples(args, tokenizer, labels, pad_token_label_id, mode):
 
         if args.local_rank in [-1, 0]:
             logger.info("Saving features into cached file %s", cached_features_file)
+            Path(cached_features_file).parent.mkdir(exist_ok=True, parents=True)
             torch.save(features, cached_features_file)
 
     if args.local_rank == 0 and not evaluate:
