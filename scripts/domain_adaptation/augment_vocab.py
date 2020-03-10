@@ -272,7 +272,6 @@ def create_updated_vocab_txt(top_terms: List[str],
 
     # Create top term generator
     unused_tokens = [x for x in vocab if '[unused' in x]
-    assert len(unused_tokens) <= len(top_terms)  # TODO Handle the inverse situation
     mapping = dict(zip(unused_tokens, top_terms))
 
     # Update original vocab with the next top term is the token is '[unused*]'
