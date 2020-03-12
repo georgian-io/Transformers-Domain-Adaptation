@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.express as px
 
 
-def parallel_coord_plot(df: pd.DataFrame, metric: str = "test_f1" ):
+def parallel_coord_plot(df: pd.DataFrame, metric: str = "test_f1"):
     # Treat string columns as categorical and convert into numbers for visualization
     for col in df.columns:
         if pd.api.types.is_string_dtype(df[col]):
