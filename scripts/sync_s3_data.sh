@@ -15,7 +15,7 @@ for domain in $DOMAINS; do
     # Load corpus
     mkdir -p "data/$domain/corpus"
     aws s3 cp "$BUCKET/domains/$domain/corpus/" "data/$domain/corpus" \
-      --recursive --exclude "*" --include "*.txt" --exclude "/"
+      --recursive --exclude "*" --include "*.txt" --exclude "*/*"
 
     # Load task dataset
     if [ $domain = "biology" ]; then
@@ -25,5 +25,5 @@ for domain in $DOMAINS; do
 done
 
 # Copy cached folders
-if [ -e results ]; then mkdir results; fi
-aws s3 sync "$BUCKET/cache/" "results"
+if ! [ -e results ]; then mkdir results; fi
+aws s3 sync "$BUCKET/cache/" "results" --exclude "*checkpoint*"
