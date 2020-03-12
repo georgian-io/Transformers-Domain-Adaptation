@@ -39,6 +39,11 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from tokenizers import BertWordPieceTokenizer, Tokenizer
+
+import sys
+sys.path.append(str(Path(__file__).parent))
+from domain_adaptation_utils import copy_files
+
 from src.tokenizer import truncate
 from src.utils.iter import batch as batch_iters
 from src.utils.multiproc import parallelize
@@ -707,6 +712,8 @@ def main():
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     args = parser.parse_args()
 
+    args.final_checkpoint = os.path.join(args.output_dir, "checkpoint-end")
+
     if args.model_type in ["bert", "roberta", "distilbert", "camembert"] and not args.mlm:
         raise ValueError(
             "BERT and RoBERTa-like models do not have LM heads but masked LM heads. They must be run using the --mlm "
@@ -855,21 +862,23 @@ def main():
         model_to_save = (
             model.module if hasattr(model, "module") else model
         )  # Take care of distributed/parallel training
-        model_to_save.save_pretrained(args.output_dir)
-        tokenizer.save_pretrained(args.output_dir)
+
+        Path(args.final_checkpoint).mkdir(exist_ok=True, parents=True)
+        model_to_save.save_pretrained(args.final_checkpoint)
+        tokenizer.save_pretrained(args.final_checkpoint)
 
         # Good practice: save your training arguments together with the trained model
-        torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        torch.save(args, os.path.join(args.final_checkpoint, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = model_class.from_pretrained(args.output_dir)
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir)
+        model = model_class.from_pretrained(args.final_checkpoint)
+        tokenizer = tokenizer_class.from_pretrained(args.final_checkpoint)
         model.to(args.device)
 
     # Evaluation
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
-        checkpoints = [args.output_dir]
+        checkpoints = [args.final_checkpoint]
         if args.eval_all_checkpoints:
             checkpoints = list(
                 os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
@@ -885,6 +894,18 @@ def main():
             result = evaluate(args, model, tokenizer, prefix=prefix)
             result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)
+
+        # Find best checkpoint based on lowest perplexity
+        logger.info("Finding best checkpoint based on lowest eval perplexity")
+        best_checkpoint = sorted(results, key=lambda x: results[x].tolist())[0].split('_')[-1]
+        (Path(args.output_dir) / 'best_checkpoint.txt').write_text(best_checkpoint)
+        best_checkpoint_folder = (
+            Path(args.output_dir)
+            / (f'checkpoint-{best_checkpoint}' if best_checkpoint.isnumeric() else '')
+        )
+        logger.info(f"Best checkpoint found at checkpoint-{best_checkpoint}")
+        logger.info(f"Copying best checkpoint artifacts to {args.output_dir}")
+        copy_files(best_checkpoint_folder, args.output_dir)
 
     return results
 
