@@ -53,7 +53,7 @@ from transformers import (
 )
 sys.path.append(str(Path(__file__).parent))
 from utils_ner import convert_examples_to_features, get_labels, read_examples_from_file
-
+from domain_adaptation_utils import copy_files
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -507,6 +507,12 @@ def main():
         action="store_true",
         help="Evaluate all checkpoints starting with the same prefix as model_name ending and ending with step number",
     )
+    parser.add_argument(
+        "--checkpoint_eval_metric",
+        choices=('precision', 'recall', 'f1', 'loss'),
+        default='f1',
+        help="Metric to use when evaluating the best checkpoint"
+    )
     parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available")
     parser.add_argument(
         "--overwrite_output_dir", action="store_true", help="Overwrite the content of the output directory"
@@ -532,6 +538,8 @@ def main():
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
     args = parser.parse_args()
+
+    args.final_checkpoint = os.path.join(args.output_dir, "checkpoint-end")
 
     if (
         os.path.exists(args.output_dir)
@@ -640,17 +648,19 @@ def main():
         model_to_save = (
             model.module if hasattr(model, "module") else model
         )  # Take care of distributed/parallel training
-        model_to_save.save_pretrained(args.output_dir)
-        tokenizer.save_pretrained(args.output_dir)
+
+        Path(args.final_checkpoint).mkdir(exist_ok=True, parents=True)
+        model_to_save.save_pretrained(args.final_checkpoint)
+        tokenizer.save_pretrained(args.final_checkpoint)
 
         # Good practice: save your training arguments together with the trained model
-        torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+        torch.save(args, os.path.join(args.final_checkpoint, "training_args.bin"))
 
     # Evaluation
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
-        checkpoints = [args.output_dir]
+        tokenizer = tokenizer_class.from_pretrained(args.final_checkpoint, do_lower_case=args.do_lower_case)
+        checkpoints = [args.final_checkpoint]
         if args.eval_all_checkpoints:
             checkpoints = list(
                 os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
@@ -669,6 +679,20 @@ def main():
         with open(output_eval_file, "w") as writer:
             for key in sorted(results.keys()):
                 writer.write("{} = {}\n".format(key, str(results[key])))
+
+        # Find best checkpoint based on metric
+        logger.info("Finding best checkpoint based on lowest eval perplexity")
+        best_checkpoint = sorted([x for x in results.keys() if args.checkpoint_eval_metric in x],
+                                key=lambda x: results[x],
+                                reverse=(args.checkpoint_eval_metric != 'loss'))[0].split('_')[0]
+        (Path(args.output_dir) / 'best_checkpoint.txt').write_text(best_checkpoint)
+        best_checkpoint_folder = (
+            Path(args.output_dir)
+            / (f'checkpoint-{best_checkpoint}' if best_checkpoint.isnumeric() else '')
+        )
+        logger.info(f"Best checkpoint found at checkpoint-{best_checkpoint}")
+        logger.info(f"Copying best checkpoint artifacts to {args.output_dir}")
+        copy_files(best_checkpoint_folder, args.output_dir)
 
     if args.do_predict and args.local_rank in [-1, 0]:
         tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
