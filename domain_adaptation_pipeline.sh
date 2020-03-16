@@ -186,6 +186,10 @@ fi
 EVAL_CORPUS_ARGS=()
 if ! [ -z $EVAL_CORPUS ]; then
     # read -r EVAL_CORPUS_ARGS <<< "--do_eval --eval_data_file $EVAL_CORPUS"  # TODO Figure out
+    if ! [ -e $EVAL_CORPUS ]; then
+        echo "$EVAL_CORPUS does not exist"
+        exit 1
+    fi
     EVAL_CORPUS_ARGS+=("--do_eval")
     EVAL_CORPUS_ARGS+=("--eval_data_file")
     EVAL_CORPUS_ARGS+=($EVAL_CORPUS)
