@@ -9,7 +9,8 @@ else
 fi
 
 # First window for general stuff
-tmux send-keys "sudo yum install zsh -y" C-m
+tmux send-keys "sudo apt install zsh -y" C-m
+tmux send-keys "if [ -z $BUCKET ]; then echo export BUCKET=s3://nlp-domain-adaptation >> ~/.zshrc; fi" C-m
 tmux send-keys "exec zsh" C-m
 tmux send-keys "source activate pytorch_p36" C-m
 tmux send-keys "pip install -U pip" C-m
@@ -17,7 +18,7 @@ tmux send-keys "pip install -r requirements.txt" C-m
 
 # Second window for htop
 tmux split-window -v
-tmux send-keys "sudo yum install htop -y" C-m
+tmux send-keys "sudo apt install htop -y" C-m
 tmux send-keys "htop" C-m
 
 # Third window for GPU usage
