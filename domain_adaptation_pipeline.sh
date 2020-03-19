@@ -314,7 +314,6 @@ else
         --evaluate_during_training \
         --do_predict \
         --save_steps 1000 \
-        --overwrite_cache \
         $FP16 \
         $OVERWRITE_OUTPUT_DIR
 fi
