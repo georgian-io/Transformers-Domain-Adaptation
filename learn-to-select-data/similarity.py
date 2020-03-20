@@ -4,6 +4,7 @@ different representations.
 """
 
 import os
+from collections import Counter
 
 from sklearn.feature_extraction.text import CountVectorizer
 import gensim
@@ -154,13 +155,18 @@ def get_term_dist(docs, vocab, lowercase=True):
     :return: the term distribution of the input documents,
              i.e. a numpy array of shape (vocab_size,)
     """
+    # Split generators this way for slight performance gain
+    # as compared to performing ternary evaluation inside generation
+    if lowercase:
+        terms = (word.lower() for doc in docs for word in doc)
+    else:
+        terms = (word for doc in docs for word in doc)
+    term_counts = Counter(terms)
+
+    # Convert counts to an ordered term distribution
     term_dist = np.zeros(vocab.size)
-    for doc in docs:
-        for word in doc:
-            if lowercase:
-                word = word.lower()
-            if word in vocab.word2id:
-                term_dist[vocab.word2id[word]] += 1
+    for term, count in term_counts.items():
+        term_dist[vocab.word2id[term]] = count
 
     # normalize absolute freqs to obtain a relative frequency term distribution
     term_dist /= np.sum(term_dist)
