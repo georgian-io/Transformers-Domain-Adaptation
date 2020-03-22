@@ -19,6 +19,7 @@ class Eurlex57kDataset(Dataset):
                  eurlex57k: pd.DataFrame,
                  mode: str,
                  tokenizer: tokenizers.Tokenizer):
+        eurlex57k = eurlex57k.copy()
         if mode not in ('train', 'dev', 'test'):
             raise ValueError('Incorrect value "{mode}" specified for `mode`')
         if mode not in eurlex57k['dataset'].values:
@@ -40,12 +41,13 @@ class Eurlex57kDataset(Dataset):
 
         self.texts = (
             df[TEXT_COLS]
-            .apply(lambda x: ' '.join(x), axis=1)
+            .apply(lambda row: ' '.join(x for elem in row for x in elem.split()), axis=1)
             .apply(lambda x: unicodedata
                              .normalize('NFKD', x)
                              .encode('ascii', 'ignore')
                              .decode("utf-8"))
         )
+
         self.examples = (
             [truncate(enc.ids)
              for enc in tokenizer.encode_batch(self.texts.tolist())]
