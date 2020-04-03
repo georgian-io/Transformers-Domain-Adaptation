@@ -1,0 +1,38 @@
+{
+  "TargetCapacity": 1,
+  "IamFleetRole": "arn:aws:iam::823217009914:role/autonlp-spot-fleet-role",
+  "LaunchSpecifications": [
+      {
+          "ImageId": "ami-0dbb717f493016a1a",
+          "KeyName": "chris-ssh",
+          "SecurityGroups": [
+              {
+                  "GroupId": "sg-758c4705"
+              }
+          ],
+          "BlockDeviceMappings": [
+            {
+                "Ebs": {
+                    "VolumeSize": 1000
+                }
+            }
+          ],
+          "InstanceType": "c5.2xlarge",
+          "TagSpecifications": [
+              {
+                  "ResourceType": "instance",
+                  "Tags": [
+                      {
+                          "Key": "Name",
+                          "Value": "autonlp-spot-trainer"
+                      }
+                  ]
+              }
+          ],
+		  "UserData": "base64_encoded_bash_script",
+          "IamInstanceProfile": {
+              "Arn": "arn:aws:iam::823217009914:instance-profile/autonlp-profile"
+          }
+      }
+  ]
+}
