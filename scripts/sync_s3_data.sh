@@ -1,6 +1,5 @@
-#!/bin/zsh
+#!/bin/bash
 BUCKET="s3://nlp-domain-adaptation"
-
 
 if [ $(basename $(pwd)) != "NLP-Domain-Adaptation" ]; then
     echo "This script is intended to run in the NLP-Domain-Adaptation folder."
