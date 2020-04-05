@@ -51,4 +51,4 @@ sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36;
 sudo -H -u $USER zsh -c "./scripts/train.sh"
 
 # Sync data to S3 and terminate spot fleet
-teardown
+# teardown
