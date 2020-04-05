@@ -14,7 +14,8 @@
                 "ec2:CreateSnapshot",
                 "ec2:DescribeSnapshots",
                 "ec2:DescribeSpotInstanceRequests",
-                "ec2:CancelSpotFleetRequests"
+                "ec2:CancelSpotFleetRequests",
+                "s3:*"
             ],
             "Resource": "*"
         }
