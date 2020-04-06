@@ -27,6 +27,15 @@ if ! [ -e $LABELS ]; then
     fi
 fi
 
+# Set up daemon to sync training results
+function sync_results() {
+    aws s3 sync $OUTPUT_DIR \
+        "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)" \
+        --recursive
+}
+watch -n 1800 sync_results &
+SYNC_PID=$!
+
 # Run domain adaptation
 ./domain_adaptation_pipeline.sh \
     --corpus $CORPUS \
@@ -40,4 +49,7 @@ fi
     --skip-domain-pre-train \
     -v
 ./scripts/sync_tb_logs.sh $OUTPUT_DIR
-aws s3 cp $OUTPUT_DIR "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)" --recursive
+
+# Clean up sync daemon and run end-of-training sync
+kill $SYNC_PID
+sync_results
