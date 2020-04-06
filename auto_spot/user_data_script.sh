@@ -44,7 +44,7 @@ git checkout $GIT_BRANCH
 # Install dependencies
 sleep 120  # Wait until apt lock is released
 apt install zsh htop -y &> install.log
-sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; pip install -U pip; pip install -r requirements.txt" >> install.log 2>&1
+sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; pip install -U pip jupyterlab; pip install -r requirements.txt" >> install.log 2>&1
 # sudo -H -u $USER zsh -c "curl https://pyenv.run | zsh; pyenv install $PYTHON_VERSION; pyenv virtualenv $PYTHON_VERSION autonlp"
 
 # Initiate training
