@@ -12,9 +12,9 @@ DOMAINS=("biology" "law")
 SUBDIRECTORIES=("corpus" "tasks")
 for domain in $DOMAINS; do
     # # Load corpus
-    # mkdir -p "data/$domain/corpus"
-    # aws s3 cp "$BUCKET/domains/$domain/corpus/" "data/$domain/corpus" \
-    #   --recursive --exclude "*" --include "*.txt" --exclude "*/*"
+    mkdir -p "data/$domain/corpus"
+    aws s3 cp "$BUCKET/domains/$domain/corpus/" "data/$domain/corpus" \
+      --recursive --exclude "*" --include "*.txt" --exclude "*/*"
 
     # Load task dataset
     if [ $domain = "biology" ]; then
@@ -24,5 +24,12 @@ for domain in $DOMAINS; do
 done
 
 # Copy cached folders
-# if ! [ -e results ]; then mkdir results; fi
-# aws s3 sync "$BUCKET/cache/" "results" --exclude "*checkpoint*"
+if ! [ -e results ]; then mkdir results; fi
+
+DPT_COMPLETIONS=( [10]=10000 [25]=30000 [50]=60000 [75]=95000 )
+for DPT_COMPLETION in ${!DPT_COMPLETIONS[@]}; do
+    CKPT_NUM=${DPT_COMPLETIONS[$DPT_COMPLETION]}
+    DEST=results/BC2GM/pubmed_2pct_seed281_${DPT_COMPLETION}pct_dpt/domain-pre-trained
+    mkdir -p $DEST
+    aws s3 cp "$BUCKET/cache/pubmed_2pct_seed281/domain-pre-trained/checkpoint-$CKPT_NUM" $DEST --recursive --exclude "*pt"
+done

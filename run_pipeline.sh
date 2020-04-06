@@ -1,8 +1,14 @@
 #!/bin/zsh
-CORPUS="data/biology/tasks/linnaeus/corpus/linnaeus_corpus.txt"
-TASK_DIR="data/biology/tasks/linnaeus"
-OUTPUT_DIR="results/bio_linnaeus/dpt_default"
-CONTINUE_DPT="FALSE"
+FINE_TUNE_DATASET="BC2GM"
+PCT=2
+SEED=281
+DPT_COMPLETION=$1
+if [ -z $DPT_COMPLETION ]; then echo "Require DPT COMPLETION as first arg"; exit 1; fi
+CORPUS="data/biology/corpus/shards"
+FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
+EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
+TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
+OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_seed${SEED}_${DPT_COMPLETION}pct_dpt"
 MAX_STEPS="10000"
 
 LABELS=$TASK_DIR/labels.txt
@@ -10,7 +16,7 @@ LABELS=$TASK_DIR/labels.txt
 
 # NER fine tuning args
 export MAX_LENGTH=128
-export NUM_EPOCHS_NER=3
+export NUM_EPOCHS_NER=25
 
 # Create labels if they do not exist
 if ! [ -e $LABELS ]; then
@@ -19,11 +25,6 @@ if ! [ -e $LABELS ]; then
         echo "Label generation failed"
         exit 0
     fi
-fi
-
-SHOULD_CONTINUE=""
-if [ $CONTINUE_DPT = "TRUE" ]; then
-    SHOULD_CONTINUE="--should-continue"
 fi
 
 # Run domain adaptation
@@ -37,5 +38,6 @@ fi
     --save-steps 2500 \
     --skip-augment-vocab \
     --skip-domain-pre-train \
-    $SHOULD_CONTINUE \
     -v
+./scripts/sync_tb_logs.sh $OUTPUT_DIR
+aws s3 cp $OUTPUT_DIR "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)" --recursive
