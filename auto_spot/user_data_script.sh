@@ -12,7 +12,7 @@ INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 USER="ubuntu"
 REPO="https://github.com/georgianpartners/NLP-Domain-Adaptation"
 WORK_DIR="/home/$USER/NLP-Domain-Adaptation"
-GIT_BRANCH="git-branch-temp"  # Value to be replaced by sed in `submit_spot_request`
+GIT_BRANCH="exp-dpt-completion-bc2gm"  # Value to be replaced by sed in `submit_spot_request`
 
 # Clean up spot fleet requests
 function teardown() {
@@ -47,8 +47,20 @@ apt install zsh htop -y &> install.log
 sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; pip install -U pip jupyterlab; pip install -r requirements.txt" >> install.log 2>&1
 # sudo -H -u $USER zsh -c "curl https://pyenv.run | zsh; pyenv install $PYTHON_VERSION; pyenv virtualenv $PYTHON_VERSION autonlp"
 
+# Give script permissions to write files and folder
+sudo chmod -R 777 results
+
 # Initiate training
 sudo -H -u $USER zsh -c "./scripts/train.sh"
 
+# Prevents spot fleet from terminating until all training jobs are done
+sleep 30
+$PIDS=$(ps -ef | grep ./run_pipeline.sh | grep -v grep | awk {'print $2'})
+for pid in ${$PIDS[@]}; do
+    while [ -e /proc/$pid ]; do
+        sleep 300
+    done
+done
+
 # Sync data to S3 and terminate spot fleet
-# teardown
+teardown
