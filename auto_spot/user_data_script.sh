@@ -12,7 +12,7 @@ INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 USER="ubuntu"
 REPO="https://github.com/georgianpartners/NLP-Domain-Adaptation"
 WORK_DIR="/home/$USER/NLP-Domain-Adaptation"
-GIT_BRANCH="exp-dpt-completion-bc2gm"  # Value to be replaced by sed in `submit_spot_request`
+GIT_BRANCH="git-branch-temp"  # Value to be replaced by sed in `submit_spot_request`
 
 # Clean up spot fleet requests
 function teardown() {
