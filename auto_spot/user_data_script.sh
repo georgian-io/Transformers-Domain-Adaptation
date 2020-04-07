@@ -29,7 +29,7 @@ function teardown() {
         --terminate-instances
 }
 
-# Load code for training
+# Load git repo
 cd $(dirname $WORK_DIR)
 git clone $REPO
 chown -R $USER: $WORK_DIR
@@ -38,17 +38,18 @@ cd $WORK_DIR
 # Change to appropriate git branch to run experiments
 git checkout $GIT_BRANCH
 
-# Download data
-./scripts/sync_s3_data.sh &
+# Give script permissions to write files and folder
+sudo chmod -R 777 $WORK_DIR
+
+# Download datad
+./scripts/sync_s3_data.sh &> setup.log 2>&1 &
 
 # Install dependencies
 sleep 120  # Wait until apt lock is released
-apt install zsh htop -y &> setup.log
+apt install zsh htop -y >> setup.log 2>&1
 sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; pip install -U pip jupyterlab; pip install -r requirements.txt" >> setup.log 2>&1
 # sudo -H -u $USER zsh -c "curl https://pyenv.run | zsh; pyenv install $PYTHON_VERSION; pyenv virtualenv $PYTHON_VERSION autonlp"
 
-# Give script permissions to write files and folder
-sudo chmod -R 777 results
 
 # Initiate training
 sudo -H -u $USER zsh -c "./scripts/train.sh"
@@ -70,4 +71,4 @@ echo "Instance type is $INSTANCE_TYPE" >> setup.log 2>&1
 aws s3 cp setup.log s3://nlp-domain-adaptation/log/setup.log
 
 # Sync data to S3 and terminate spot fleet
-teardown
+# teardown
