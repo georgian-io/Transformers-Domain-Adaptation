@@ -33,3 +33,7 @@ for DPT_COMPLETION in ${!DPT_COMPLETIONS[@]}; do
     mkdir -p $DEST
     aws s3 cp "$BUCKET/cache/pubmed_2pct_seed281/domain-pre-trained/checkpoint-$CKPT_NUM" $DEST --recursive --exclude "*pt"
 done
+
+# Update write permissions so other scripts can write into these folders
+chmod -R 777 data
+chmod -R 777 results
