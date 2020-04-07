@@ -54,7 +54,7 @@ sudo chmod -R 777 results
 sudo -H -u $USER zsh -c "./scripts/train.sh"
 
 # Prevents spot fleet from terminating until all training jobs are done
-sleep 30
+sleep 120
 $PIDS=$(ps -ef | grep run_pipeline | grep -v grep | awk {'print $2'})
 for pid in ${$PIDS[@]}; do
     while [ -e /proc/$pid ]; do
