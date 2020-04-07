@@ -44,6 +44,7 @@ import sys
 sys.path.append(str(Path(__file__).parent))
 from domain_adaptation_utils import copy_files
 
+sys.path.append(str(Path(__file__).parents[2]))
 from src.tokenizer import truncate
 from src.utils.iter import batch as batch_iters
 from src.utils.multiproc import parallelize

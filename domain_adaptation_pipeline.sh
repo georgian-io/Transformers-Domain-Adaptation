@@ -17,6 +17,8 @@ OVERWRITE_CACHE=""
 OVERWRITE_OUTPUT_DIR=""
 SHOULD_CONTINUE=""
 
+DISTRIBUTED_TRAIN="FALSE"
+
 IFS="="  # Change the internal field separator
 while [ $# -gt 0 ]; do
     ARG1="$1"
@@ -120,6 +122,10 @@ while [ $# -gt 0 ]; do
         ;;
         --skip-fine-tune)
         SKIP_FINE_TUNE=TRUE
+        shift
+        ;;
+        --distributed-train)
+        DISTRIBUTED_TRAIN=TRUE
         shift
         ;;
         -v|--verbose)
@@ -264,7 +270,13 @@ else
     echo "********************************************************"
     echo "Performing domain pre-training on BERT with $CORPUS"
     echo "********************************************************"
-    python -m scripts.domain_adaptation.domain_pre_train \
+    if [ $DISTRIBUTED_TRAIN = "TRUE" ]; then
+        N_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+        CMD="python -m torch.distributed.launch --nproc_per_node 8 ./scripts/domain_adaptation/domain_pre_train.py"
+    else
+        CMD="python -m scripts.domain_adaptation.domain_pre_train"
+    fi
+    ${(z)CMD} \
         --output_dir $DOMAIN_PRE_TRAIN_FOLDER \
         --model_type "bert" \
         --tokenizer_vocab $TOKENIZER_VOCAB \
