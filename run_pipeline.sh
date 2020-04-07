@@ -2,16 +2,13 @@
 BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-SEED=281
-DPT_COMPLETION=$1
-if [ -z $DPT_COMPLETION ]; then echo "Require DPT COMPLETION as first arg"; exit 1; fi
-CORPUS="data/biology/corpus/shards"
+MOD="similar"
+CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_0.02pct.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
-OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_seed${SEED}_${DPT_COMPLETION}pct_dpt"
-
-MAX_STEPS="10000"
+OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}"
+MAX_STEPS="128194"
 CONTINUE="TRUE"
 
 LABELS=$TASK_DIR/labels.txt
@@ -47,6 +44,7 @@ fi
 # Run domain adaptation
 ./domain_adaptation_pipeline.sh \
     --corpus $CORPUS \
+    --eval-corpus $EVAL_CORPUS \
     -o $OUTPUT_DIR \
     --overwrite-output-dir \
     --fine-tune-data-dir $TASK_DIR \
@@ -54,7 +52,8 @@ fi
     --batch-size 8 \
     --save-steps 2500 \
     --skip-augment-vocab \
-    --skip-domain-pre-train \
+    --skip-fine-tune \
+    --distributed-train \
     -v $CONTINUE_ARG
 ./scripts/sync_tb_logs.sh $OUTPUT_DIR
 
