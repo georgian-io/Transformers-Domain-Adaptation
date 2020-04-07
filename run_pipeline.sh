@@ -27,15 +27,6 @@ if ! [ -e $LABELS ]; then
     fi
 fi
 
-# Set up daemon to sync training results
-function sync_results() {
-    aws s3 sync $OUTPUT_DIR/fine-tuned \
-        "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)/fine-tuned" \
-        --exclude "checkpoint*"
-}
-watch -n 1800 sync_results >> setup.log 2>&1 &
-SYNC_PID=$!
-
 # Run domain adaptation
 ./domain_adaptation_pipeline.sh \
     --corpus $CORPUS \
@@ -50,6 +41,7 @@ SYNC_PID=$!
     -v
 ./scripts/sync_tb_logs.sh $OUTPUT_DIR
 
-# Clean up sync daemon and run end-of-training sync
-kill $SYNC_PID
-sync_results >> setup.log 2>&1
+# Run end-of-training sync
+aws s3 sync $OUTPUT_DIR/fine-tuned \
+    "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)/fine-tuned" \
+    --exclude "checkpoint*"
