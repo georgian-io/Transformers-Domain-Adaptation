@@ -9,7 +9,7 @@ else
 fi
 
 # Training panes
-DPT_COMPLETIONS=( 10 25 50 75 )
+DPT_COMPLETIONS=( 50 )
 for DPT_COMPLETION in ${DPT_COMPLETIONS[@]}; do
     tmux split-window -v
     tmux send-keys "source activate pytorch_p36" C-m
