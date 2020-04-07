@@ -110,7 +110,9 @@ def parse_filename(args) -> str:
 
 def get_file_obj(filepath: Union[str, Path]) -> Iterable[str]:
     logger.info(f'Reading {filepath}')
-    return tqdm(open(filepath), desc='Reading', leave=False)
+    with open(filepath) as f:
+        n_lines = sum(1 for _ in f)
+    return tqdm(open(filepath), desc='Reading', leave=False, total=n_lines)
 
 
 def copy_selected_docs(index: np.array, args) -> None:
