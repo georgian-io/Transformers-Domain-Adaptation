@@ -33,7 +33,7 @@ function sync_results() {
         "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)/fine-tuned" \
         --exclude "checkpoint*"
 }
-watch -n 1800 sync_results &
+watch -n 1800 sync_results >> setup.log 2>&1 &
 SYNC_PID=$!
 
 # Run domain adaptation
@@ -52,4 +52,4 @@ SYNC_PID=$!
 
 # Clean up sync daemon and run end-of-training sync
 kill $SYNC_PID
-sync_results
+sync_results >> setup.log 2>&1
