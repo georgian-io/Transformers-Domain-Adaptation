@@ -4,9 +4,10 @@ SPOT_FLEET_CONFIG="auto_spot/spot_fleet_config.json"
 USER_DATA_SCRIPT="auto_spot/user_data_script.sh"
 
 GIT_BRANCH=$1
+
 if [ -z $GIT_BRANCH ]; then
-    echo "Valid git branch expected as the first argument"
-    exit 1
+    GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    echo "Using current git branch \"$GIT_BRANCH\" when initiating spot instance"
 elif ! [ $(git branch --remote | grep $GIT_BRANCH | wc -l | xargs) = 1 ]; then
     echo "Git branch provided does not exist at origin."
     exit 1
