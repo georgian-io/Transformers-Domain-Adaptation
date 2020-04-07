@@ -7,8 +7,22 @@ if [ $(basename $(pwd)) != "NLP-Domain-Adaptation" ]; then
     exit 1
 fi
 
+# Copy cached folders
+if ! [ -e results ]; then mkdir results; fi
+
+FINE_TUNE_DATASET="linnaeus"
+PCT=2
+MOD="most"
+EXP_NAME="pubmed_${PCT}pct_${MOD}_sim_div"
+
+DATA_DIR="data/biology/corpus/subsets/"
+RESULTS_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}_diverse/domain-pre-trained"
+CORPUS="pubmed_corpus_${MOD}_sim_div_1_0_jensen-shannon_1_0_entropy_linnaeus_train_2pct.txt"
+mkdir -p $DATA_DIR
+mkdir -p $RESULTS_DIR
+
 # Copy corpus and fine-tuning datasets from S3
-DOMAINS=("biology" "law")
+DOMAINS=("biology")
 SUBDIRECTORIES=("corpus" "tasks")
 for domain in $DOMAINS; do
     # # Load corpus
@@ -23,16 +37,12 @@ for domain in $DOMAINS; do
     fi
 done
 
-# Copy cached folders
-if ! [ -e results ]; then mkdir results; fi
+aws s3 cp "$BUCKET/domains/biology/corpus/subsets/$CORPUS" \
+    "data/biology/corpus/subsets/$CORPUS"
 
-DPT_COMPLETIONS=( [10]=10000 [25]=30000 [50]=60000 [75]=95000 )
-for DPT_COMPLETION in ${!DPT_COMPLETIONS[@]}; do
-    CKPT_NUM=${DPT_COMPLETIONS[$DPT_COMPLETION]}
-    DEST=results/linnaeus/pubmed_2pct_seed281_${DPT_COMPLETION}pct_dpt/domain-pre-trained
-    mkdir -p $DEST
-    aws s3 cp "$BUCKET/cache/pubmed_2pct_seed281/domain-pre-trained/checkpoint-$CKPT_NUM" $DEST --recursive --exclude "*pt"
-done
+aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME" \
+    "results/$FINE_TUNE_DATASET/$EXP_NAME" \
+    --recursive
 
 # Update write permissions so other scripts can write into these folders
 sudo chmod -R 777 data
