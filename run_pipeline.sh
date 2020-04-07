@@ -29,9 +29,9 @@ fi
 
 # Set up daemon to sync training results
 function sync_results() {
-    aws s3 sync $OUTPUT_DIR \
-        "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)" \
-        --recursive
+    aws s3 sync $OUTPUT_DIR/fine-tuned \
+        "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)/fine-tuned" \
+        --exclude "checkpoint*"
 }
 watch -n 1800 sync_results &
 SYNC_PID=$!
