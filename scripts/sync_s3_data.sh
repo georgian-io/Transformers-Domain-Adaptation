@@ -12,7 +12,7 @@ if ! [ -e results ]; then mkdir results; fi
 
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-MOD="similar"
+MOD="dissimilar"
 
 # Copy corpus and fine-tuning datasets from S3
 DOMAINS=("biology")

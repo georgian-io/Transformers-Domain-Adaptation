@@ -2,8 +2,8 @@
 BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-MOD="similar"
-CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_0.02pct.txt"
+MOD="dissimilar"
+CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_${FINE_TUNE_DATASET}_train_0.02pct.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
