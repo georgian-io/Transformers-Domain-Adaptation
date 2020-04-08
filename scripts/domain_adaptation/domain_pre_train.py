@@ -446,7 +446,7 @@ def train(args, train_dataset, model: PreTrainedModel, tokenizer: Tokenizer) -> 
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     if (
-                        args.local_rank == -1 and args.evaluate_during_training
+                        args.local_rank == -1 and args.evaluate_during_training and args.eval_data_file is not None
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
                         results = evaluate(args, model, tokenizer)
                         for key, value in results.items():
