@@ -4,13 +4,17 @@ SPOT_FLEET_CONFIG="auto_spot/spot_fleet_config.json"
 USER_DATA_SCRIPT="auto_spot/user_data_script.sh"
 
 GIT_BRANCH=$1
+if [ -z $GIT_BRANCH ]; then GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD); fi
 
-if [ -z $GIT_BRANCH ]; then
-    GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    echo "Using current git branch \"$GIT_BRANCH\" when initiating spot instance"
-elif ! [ $(git branch --remote | grep $GIT_BRANCH | wc -l | xargs) = 1 ]; then
-    echo "Git branch provided does not exist at origin."
+# Check if remote git branch exists to run code on VM
+function remote_branch_exists() {
+    git branch --remote | grep "/$1$" | wc -l | xargs
+}
+if ! [ $(remote_branch_exists $GIT_BRANCH) = 1 ]; then
+    echo "\"$GIT_BRANCH\" branch does not exist at origin."
     exit 1
+else
+    echo "Using git branch \"$GIT_BRANCH\" when initiating spot instance"
 fi
 
 # Chain of
