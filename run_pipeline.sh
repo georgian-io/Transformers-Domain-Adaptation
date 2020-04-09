@@ -3,7 +3,8 @@ BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
 MOD="similar"
-CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_0.02pct.txt"
+
+CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_${FINE_TUNE_DATASET}_train_0.02pct.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
@@ -52,10 +53,9 @@ fi
     --batch-size 8 \
     --save-steps 2500 \
     --skip-augment-vocab \
-    --skip-fine-tune \
+    --skip-domain-pre-train \
     --distributed-train \
     -v $CONTINUE_ARG
-./scripts/sync_tb_logs.sh $OUTPUT_DIR
 
 # Run end-of-training sync
 kill $DAEMON_PID # Kill syncing daemon to prevent race conditions
