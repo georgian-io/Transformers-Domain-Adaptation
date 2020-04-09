@@ -12,7 +12,7 @@ if ! [ -e results ]; then mkdir results; fi
 
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-MOD="similar"
+MOD="dissimilar"
 
 # Copy corpus and fine-tuning datasets from S3
 DOMAINS=("biology")
@@ -31,7 +31,7 @@ for domain in $DOMAINS; do
 done
 
 DATA_DIR="data/biology/corpus/subsets/"
-RESULTS_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_similar/domain-pre-trained"
+RESULTS_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}/domain-pre-trained"
 
 mkdir -p $DATA_DIR
 mkdir -p $RESULTS_DIR
