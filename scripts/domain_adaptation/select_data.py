@@ -153,7 +153,7 @@ def docs_to_term_dist(docs: Iterable[str],
 
     # Convert each token into a term distribution
     term_dists: Iterable[np.array] = (
-        similarity.get_term_dist(x, vocab=vocab_obj, lowercase=lowercase)
+        similarity.get_term_dist([x], vocab=vocab_obj, lowercase=lowercase)
         for x in tokenized
     )
     return term_dists
@@ -192,7 +192,7 @@ def select_similar(args) -> np.array:
     # proper normalized term distribution
     f = get_file_obj(args.fine_tune_text)
     ft_text = [' '.join(line.strip() for line in f)]
-    *_, ft_term_dist = it.accumulate(to_term_dist(ft_text))
+    ft_term_dist = next(to_term_dist(ft_text))
     f.close()
 
     # Get term distribution for each doc in the corpus
