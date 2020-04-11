@@ -116,7 +116,7 @@ def parse_filename(args: argparse.Namespace) -> str:
         filename += f'_{args.sim_func}'
         filename += f'_{args.fine_tune_text.stem}'
     elif args.mode == 'diverse':
-        filename += '_diverse'
+        filename += '_most_diverse' if not args.invert else '_least_diverse'
         filename += f'_{args.div_func}'
     else:
         raise NotImplementedError
