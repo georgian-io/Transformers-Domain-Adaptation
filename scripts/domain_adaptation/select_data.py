@@ -170,6 +170,7 @@ def docs_to_tokens(docs: Iterable[str],
                    lowercase: bool,
                    chunk_size: int,
                   ) -> Iterable[List[str]]:
+    special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
     tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=lowercase)
 
     # Tokenize each document
@@ -180,7 +181,7 @@ def docs_to_tokens(docs: Iterable[str],
     )
 
     # Filter out possible unknown tokens
-    tokenized = ([x for x in tokens if x != '[UNK]'] for tokens in tokenized)
+    tokenized = ([x for x in tokens if x not in special_tokens] for tokens in tokenized)
     return tokenized
 
 
