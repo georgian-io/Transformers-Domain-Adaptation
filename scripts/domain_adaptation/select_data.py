@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args():
+    """Parse arguments."""
     parser = argparse.ArgumentParser(
         "Script to select subset of corpus for downstream domain adaptation.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -105,6 +106,7 @@ def parse_args():
 
 
 def parse_filename(args: argparse.Namespace) -> str:
+    """Parse filename based on data selection mode."""
     filename = args.corpus.stem
     if args.mode == 'random':
         filename += f'_{args.mode}'
@@ -134,13 +136,18 @@ def parse_filename(args: argparse.Namespace) -> str:
 
 
 def get_file_obj(filepath: Union[str, Path]):
+    """Return a file object for streaming."""
     logger.info(f'Reading {filepath}')
+
+    # Get the total number of lines for processing time estimates
     with open(filepath) as f:
         n_lines = sum(1 for _ in f)
+
     return tqdm(open(filepath), desc='Reading', leave=False, total=n_lines)
 
 
 def copy_selected_docs(index: np.array, args: argparse.Namespace) -> None:
+    """Create a subset corpus by copying selected documents."""
     # Save corpus
     logger.info(f'Saving subset corpus to {args.dst / args.filename}')
     args.dst.mkdir(exist_ok=True, parents=True)
@@ -157,7 +164,18 @@ def copy_selected_docs(index: np.array, args: argparse.Namespace) -> None:
 
 
 def create_vocab(vocab_file: Path) -> SimpleNamespace:
-    # Create a duck-typed Vocabulary object to work on `similarity.get_term_dist`
+    """Create a duck-type Vocabulary object.
+
+    The Vocabulary object is a user-defined object from the
+    `learn-to-select-data` repo. It is used in `similarity.get_term_dist`.
+
+    Arguments:
+        vocab_file {Path} -- Path to vocabulary file
+
+    Returns:
+        SimpleNamespace -- A duck-typed Vocabulary object
+    """
+    # Create a duck-typed Vocabulary object to work on `similarity.get_term_dist`.
     vocab = vocab_file.read_text().splitlines()
     vocab_obj = SimpleNamespace()
     vocab_obj.size = len(vocab)
@@ -170,6 +188,17 @@ def docs_to_tokens(docs: Iterable[str],
                    lowercase: bool,
                    chunk_size: int,
                   ) -> Iterable[List[str]]:
+    """Tokenize documents.
+
+    Arguments:
+        docs {Iterable[str]} -- Documents
+        vocab_file {Path} -- Path to vocabulary file
+        lowercase {bool} -- If True, performs lowercasing
+        chunk_size {int} -- Tokenization batch size
+
+    Returns:
+        Iterable[List[str]] -- A tokenized corpus
+    """
     special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
     tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=lowercase)
 
@@ -191,6 +220,29 @@ def docs_to_term_dist(docs: Iterable[str],
                       chunk_size: int,
                       level: str = 'corpus'
                      ) -> Union[np.array, Iterable[np.array]]:
+    """Convert documents into term (token) distributions.
+
+    This is done by first tokenizing documents and then converting them into
+    distributions based on vocab available in `vocab_file`.
+
+    Arguments:
+        docs {Iterable[str]} -- Documents
+        vocab_file {Path} -- Path to vocabulary file
+        lowercase {bool} -- If True, perform lowercasing
+        chunk_size {int} -- Tokenization batch size
+
+    Keyword Arguments:
+        level {str} -- Level at which to form term distribution.
+                       Valid values are {"corpus", "doc"}. If "corpus", create
+                       a corpus-level term distribution. If "doc", create
+                       a document-level term distribution (default: {'corpus'})
+
+    Raises:
+        ValueError: If an invalid value for `level` is provided
+
+    Returns:
+        Union[np.array, Iterable[np.array]] -- The term distribution(s)
+    """
     tokenized = docs_to_tokens(docs=docs,
                                vocab_file=vocab_file,
                                lowercase=lowercase,
@@ -206,7 +258,7 @@ def docs_to_term_dist(docs: Iterable[str],
         )
     elif level == 'doc':
         # Convert tokenized docs into doc-level term distributions
-        term_dist: Iterable[np.array] = (
+        term_dist: Iterable[np.array] = (  # type: ignore
             similarity.get_term_dist([x], vocab=vocab_obj, lowercase=lowercase)
             for x in tokenized
         )
@@ -217,6 +269,11 @@ def docs_to_term_dist(docs: Iterable[str],
 
 def _rank_metric_and_select(scores: pd.Series,
                             args: argparse.Namespace) -> np.array:
+    """
+    Rank metrics and select top (or bottom) values.
+
+    Called by metric-based selection methods.
+    """
     # Create the selection index
     selection_index = np.zeros((len(scores)), dtype=bool)
     if args.threshold is None:
@@ -245,6 +302,7 @@ def _rank_metric_and_select(scores: pd.Series,
 
 
 def select_random(args: argparse.Namespace) -> np.array:
+    """Randomly select documents."""
     f = get_file_obj(args.corpus)
     n_lines = sum(1 for _ in f)
     f.close()
@@ -262,8 +320,7 @@ def select_random(args: argparse.Namespace) -> np.array:
 
 
 def select_similar(args: argparse.Namespace) -> pd.Series:
-    # Docs are '\n'-delimited text
-
+    """Select documents that are most / least similar to a fine-tuning corpus."""
     # Create a partial-ed function for conciseness
     to_term_dist = partial(docs_to_term_dist,
                            vocab_file=args.vocab_file,
@@ -295,22 +352,25 @@ def select_similar(args: argparse.Namespace) -> pd.Series:
 
 
 def select_diverse(args: argparse.Namespace) -> pd.Series:
+    """Select documents that are most / least diverse."""
     # Get term distribution for each doc in the corpus
     corpus_f = get_file_obj(args.corpus)
     corpus_f1, corpus_f2 = it.tee(corpus_f)
 
+    # Tokenize the corpus
     corpus = docs_to_tokens(corpus_f1,
                             vocab_file=args.vocab_file,
                             lowercase=args.lowercase,
                             chunk_size=args.chunk_size)
+
+    # Get a documnet-level term distribution
     doc_term_dists = docs_to_term_dist(corpus_f2,
                                        vocab_file=args.vocab_file,
                                        lowercase=args.lowercase,
                                        chunk_size=args.chunk_size, level='doc')
 
-    word2id = create_vocab(args.vocab_file).word2id
-
     # Calculate diversity for each doc in the corpus
+    word2id = create_vocab(args.vocab_file).word2id
     diversity_scores = pd.Series(
         diversity.diversity_feature_name2value(args.div_func, example=doc,
                                                train_term_dist=doc_term_dist,
@@ -321,6 +381,7 @@ def select_diverse(args: argparse.Namespace) -> pd.Series:
 
 
 def main(args: argparse.Namespace):
+    """Execute script."""
     # Parse filename if not provided
     if args.filename is None:
         args.filename = parse_filename(args)
