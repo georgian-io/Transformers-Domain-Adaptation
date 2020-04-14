@@ -10,6 +10,7 @@ EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
 OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_seed${SEED}_${DPT_COMPLETION}pct_dpt"
 MAX_STEPS="10000"
+CONTINUE="TRUE"
 
 LABELS=$TASK_DIR/labels.txt
 
@@ -27,6 +28,13 @@ if ! [ -e $LABELS ]; then
     fi
 fi
 
+# Continue domain pre-training from a checkpoint if possible
+if [ $CONTINUE = "TRUE" ] \
+   && [ -e $OUTPUT_DIR/domain-pre-trained ] \
+   && ! [ $(ls $OUTPUT_DIR/domain-pre-trained | grep "checkpoint" | wc -l) = 0 ]; then
+    CONTINUE_ARG="--should-continue"
+fi
+
 # Run domain adaptation
 ./domain_adaptation_pipeline.sh \
     --corpus $CORPUS \
@@ -38,7 +46,7 @@ fi
     --save-steps 2500 \
     --skip-augment-vocab \
     --skip-domain-pre-train \
-    -v
+    -v $CONTINUE_ARG
 ./scripts/sync_tb_logs.sh $OUTPUT_DIR
 
 # Run end-of-training sync
