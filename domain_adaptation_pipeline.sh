@@ -272,8 +272,8 @@ else
     echo "Performing domain pre-training on BERT with $CORPUS"
     echo "********************************************************"
     if [ $DISTRIBUTED_TRAIN = "TRUE" ]; then
-        N_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
-        CMD="python -m torch.distributed.launch --nproc_per_node 8 ./scripts/domain_adaptation/domain_pre_train.py"
+        NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+        CMD="python -m torch.distributed.launch --nproc_per_node $NUM_GPUS ./scripts/domain_adaptation/domain_pre_train.py"
     else
         CMD="python -m scripts.domain_adaptation.domain_pre_train"
     fi
