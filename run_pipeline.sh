@@ -1,4 +1,5 @@
 #!/bin/zsh
+BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
 SEED=281
@@ -9,11 +10,11 @@ FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
 OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_seed${SEED}_${DPT_COMPLETION}pct_dpt"
+
 MAX_STEPS="10000"
 CONTINUE="TRUE"
 
 LABELS=$TASK_DIR/labels.txt
-
 
 # NER fine tuning args
 export MAX_LENGTH=128
@@ -27,6 +28,14 @@ if ! [ -e $LABELS ]; then
         exit 0
     fi
 fi
+
+# Periodically sync training artifacts to S3
+watch -n 300 \
+    aws s3 sync $OUTPUT_DIR \
+        $BUCKET/runs/${OUTPUT_DIR/results\/} \
+        --exclude "*fine-tuned/checkpoint*" \
+        > /dev/null 2>&1 &
+DAEMON_PID=$!
 
 # Continue domain pre-training from a checkpoint if possible
 if [ $CONTINUE = "TRUE" ] \
@@ -50,6 +59,7 @@ fi
 ./scripts/sync_tb_logs.sh $OUTPUT_DIR
 
 # Run end-of-training sync
-aws s3 sync $OUTPUT_DIR/fine-tuned \
-    "s3://nlp-domain-adaptation/runs/$FINE_TUNE_DATASET/$(basename $OUTPUT_DIR)/fine-tuned" \
-    --exclude "checkpoint*"
+kill $DAEMON_PID # Kill syncing daemon to prevent race conditions
+aws s3 sync $OUTPUT_DIR \
+    $BUCKET/runs/${OUTPUT_DIR/results\/} \
+    --exclude "*fine-tuned/checkpoint*"
