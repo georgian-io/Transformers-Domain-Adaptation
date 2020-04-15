@@ -126,7 +126,7 @@ def parse_filename(args: argparse.Namespace) -> str:
     # Append subset size parameter for non-random data selection method
     if args.mode != 'random':
         if args.pct is not None:
-            filename += f'_{args.pct}pct'
+            filename += f'_{int(100 * args.pct)}pct'
         elif args.n_docs is not None:
             filename += f'_{args.n_docs}docs'
         elif args.threshold is not None:
