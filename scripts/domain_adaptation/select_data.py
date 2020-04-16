@@ -9,7 +9,7 @@ import itertools as it
 from pathlib import Path
 from functools import partial
 from types import SimpleNamespace
-from typing import List, Iterable, Union
+from typing import List, Iterable, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,7 @@ DIVERSITY_FUNCTIONS = [f for f in DIVERSITY_FEATURES if f != 'quadratic_entropy'
 logger = logging.getLogger(__name__)
 
 
-def parse_args():
+def parse_args(raw_args: Optional[List[str]] = None):
     """Parse arguments."""
     parser = argparse.ArgumentParser(
         "Script to select subset of corpus for downstream domain adaptation.",
@@ -97,8 +97,15 @@ def parse_args():
     subparser.add_argument('-v', '--vocab-file', type=Path, required=True,
                            help='BERT vocabulary file')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=raw_args)
 
+    # Check validity of corpus
+    if not args.corpus.exists():
+        raise FileNotFoundError(f'The corpus {args.corpus} does not exist')
+    elif args.corpus.stat().st_size == 0:
+        raise ValueError(f'The corpus {args.corpus} is empty.')
+
+    # Check validity of args.pct, if specified
     if args.pct is not None and not 0 < args.pct <= 1:
         raise ValueError(f'Invalid percentage value of {args.pct} provided')
 
@@ -146,7 +153,7 @@ def get_file_obj(filepath: Union[str, Path]):
     return tqdm(open(filepath), desc='Reading', leave=False, total=n_lines)
 
 
-def copy_selected_docs(index: np.array, args: argparse.Namespace) -> None:
+def copy_selected_docs(index: np.ndarray, args: argparse.Namespace) -> None:
     """Create a subset corpus by copying selected documents."""
     # Save corpus
     logger.info(f'Saving subset corpus to {args.dst / args.filename}')
@@ -185,8 +192,8 @@ def create_vocab(vocab_file: Path) -> SimpleNamespace:
 
 def docs_to_tokens(docs: Iterable[str],
                    vocab_file: Path,
-                   lowercase: bool,
-                   chunk_size: int,
+                   lowercase: bool = True,
+                   chunk_size: int = 2**13,
                   ) -> Iterable[List[str]]:
     """Tokenize documents.
 
@@ -216,10 +223,10 @@ def docs_to_tokens(docs: Iterable[str],
 
 def docs_to_term_dist(docs: Iterable[str],
                       vocab_file: Path,
-                      lowercase: bool,
-                      chunk_size: int,
+                      lowercase: bool = True,
+                      chunk_size: int = 2**13,
                       level: str = 'corpus'
-                     ) -> Union[np.array, Iterable[np.array]]:
+                     ) -> Union[np.ndarray, Iterable[np.ndarray]]:
     """Convert documents into term (token) distributions.
 
     This is done by first tokenizing documents and then converting them into
@@ -241,7 +248,7 @@ def docs_to_term_dist(docs: Iterable[str],
         ValueError: If an invalid value for `level` is provided
 
     Returns:
-        Union[np.array, Iterable[np.array]] -- The term distribution(s)
+        Union[np.ndarray, Iterable[np.ndarray]] -- The term distribution(s)
     """
     tokenized = docs_to_tokens(docs=docs,
                                vocab_file=vocab_file,
@@ -253,12 +260,12 @@ def docs_to_term_dist(docs: Iterable[str],
 
     if level == 'corpus':
         # Convert tokenized corpus into a corpus-level term distribution
-        term_dist: np.array = (
+        term_dist: np.ndarray = (
             similarity.get_term_dist(tokenized, vocab=vocab_obj, lowercase=lowercase)
         )
     elif level == 'doc':
         # Convert tokenized docs into doc-level term distributions
-        term_dist: Iterable[np.array] = (  # type: ignore
+        term_dist: Iterable[np.ndarray] = (  # type: ignore
             similarity.get_term_dist([x], vocab=vocab_obj, lowercase=lowercase)
             for x in tokenized
         )
@@ -268,7 +275,7 @@ def docs_to_term_dist(docs: Iterable[str],
 
 
 def _rank_metric_and_select(scores: pd.Series,
-                            args: argparse.Namespace) -> np.array:
+                            args: argparse.Namespace) -> np.ndarray:
     """
     Rank metrics and select top (or bottom) values.
 
@@ -301,7 +308,7 @@ def _rank_metric_and_select(scores: pd.Series,
     return selection_index
 
 
-def select_random(args: argparse.Namespace) -> np.array:
+def select_random(args: argparse.Namespace) -> np.ndarray:
     """Randomly select documents."""
     f = get_file_obj(args.corpus)
     n_lines = sum(1 for _ in f)
