@@ -2,7 +2,7 @@
 BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-MOD="most"
+MOD="least"
 CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_diverse_entropy_0.02pct.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
