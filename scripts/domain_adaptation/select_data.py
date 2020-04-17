@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from tokenizers import BertWordPieceTokenizer
+from sklearn.preprocessing import MinMaxScaler
 
 from src.utils.iter import batch
 sys.path.append('learn-to-select-data')
@@ -67,9 +68,11 @@ def parse_args(raw_args: Optional[List[str]] = None):
                                action='store_false', dest='lowercase',
                                help='If provided, will not perform lowercasing '
                                     'during tokenization')
+    metric_parser.add_argument('-v', '--vocab-file', type=Path,
+                               default='bert-base-uncased-vocab.txt',
+                               help='Vocabulary for tokenization')
     metric_parser.add_argument('-c', '--chunk-size', type=int, default=2**13,
                                help='Tokenization chunk size')
-
 
     # Args for "similarity" mode
     subparser = subparsers.add_parser(
@@ -83,10 +86,8 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--sim-func', choices=SIMILARITY_FUNCTIONS,
                            default='jensen-shannon',
                            help='Similarity function to use')
-    subparser.add_argument('-v', '--vocab-file', type=Path, required=True,
-                           help='BERT vocabulary file')
 
-    # Args for "similarity" mode
+    # Args for "diverse" mode
     subparser = subparsers.add_parser(
         'diverse', parents=[metric_parser],
         help='Select data based on token diversity'
@@ -94,8 +95,28 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--div-func', choices=DIVERSITY_FUNCTIONS,
                            default='entropy',
                            help='Diversity function to use')
-    subparser.add_argument('-v', '--vocab-file', type=Path, required=True,
-                           help='BERT vocabulary file')
+
+    # Args for "similar+diverse" mode
+    subparser = subparsers.add_parser(
+        'similar+diverse', parents=[metric_parser],
+        help='Select data based on token diversity'
+    )
+    subparser.add_argument('--fine-tune-text', type=Path, required=True,
+                           help='Path to fine tuning (training) text. '
+                                'Similarity of individual documents in corpus '
+                                'will be compard against this text.' )
+    subparser.add_argument('--sim-func', choices=SIMILARITY_FUNCTIONS,
+                           default='jensen-shannon',
+                           help='Similarity function to use')
+    subparser.add_argument('--div-func', choices=DIVERSITY_FUNCTIONS,
+                           default='entropy',
+                           help='Diversity function to use')
+    subparser.add_argument('-w', '--sim-div-weights', default=[1, 1],
+                           type=lambda x: [float(w) for w in x.split(',')],
+                           help='Weights for similarity and diversity metrics. '
+                                'Provide as a comma-separated string. '
+                                'For example, to compute 2 * sim + 0.5 * div, '
+                                'specify --sim-div-weights=2,0.5')
 
     args = parser.parse_args(args=raw_args)
 
@@ -127,6 +148,12 @@ def parse_filename(args: argparse.Namespace) -> str:
     elif args.mode == 'diverse':
         filename += '_most_diverse' if not args.invert else '_least_diverse'
         filename += f'_{args.div_func}'
+    elif args.mode == 'similar+diverse':
+        filename += '_most_sim_div' if not args.invert else '_least_sim_div'
+        sim_weight, div_weight = [str(w).replace('.', ',')
+                                  for w in args.sim_div_weights]
+        filename += f'_{sim_weight}_{args.sim_func}_{div_weight}_{args.div_func}'
+        filename += f'_{args.fine_tune_text.stem}'
     else:
         raise NotImplementedError
 
@@ -274,6 +301,69 @@ def docs_to_term_dist(docs: Iterable[str],
     return term_dist
 
 
+def calculate_similarity(args: argparse.Namespace) -> pd.Series:
+    """Compute similarities of documents on a fine-tune corpus."""
+    # Create a partial-ed function for conciseness
+    to_term_dist = partial(docs_to_term_dist,
+                           vocab_file=args.vocab_file,
+                           lowercase=args.lowercase,
+                           chunk_size=args.chunk_size)
+
+    # Get term distribution for fine-tune dataset
+    # Chain all FT docs into one huge doc to obtain a
+    # proper normalized term distribution
+    f = get_file_obj(args.fine_tune_text)
+    ft_text = [' '.join(line.strip() for line in f)]
+    ft_term_dist = to_term_dist(ft_text, level="corpus")
+    f.close()
+
+    # Get term distribution for each doc in the corpus
+    corpus_f = get_file_obj(args.corpus)
+    corpus_term_dists = to_term_dist(corpus_f, level="doc")
+
+    # Calculate similarity for each doc in corpus
+    similarities = pd.Series(
+        similarity.similarity_name2value(args.sim_func,
+                                         ft_term_dist, doc_term_dist)
+        for doc_term_dist in tqdm(corpus_term_dists,
+                                  desc=f'Computing {args.sim_func} similarities')
+    )
+    corpus_f.close()
+
+    return similarities
+
+
+def calculate_diversity(args: argparse.Namespace) -> pd.Series:
+    """Compute intra-document diversity."""
+    # Get term distribution for each doc in the corpus
+    corpus_f = get_file_obj(args.corpus)
+    corpus_f1, corpus_f2 = it.tee(corpus_f)
+
+    # Tokenize the corpus
+    corpus = docs_to_tokens(corpus_f1,
+                            vocab_file=args.vocab_file,
+                            lowercase=args.lowercase,
+                            chunk_size=args.chunk_size)
+
+    # Get a documnet-level term distribution
+    doc_term_dists = docs_to_term_dist(corpus_f2,
+                                       vocab_file=args.vocab_file,
+                                       lowercase=args.lowercase,
+                                       chunk_size=args.chunk_size, level='doc')
+
+    # Calculate diversity for each doc in the corpus
+    word2id = create_vocab(args.vocab_file).word2id
+    diversity_scores = pd.Series(
+        diversity.diversity_feature_name2value(args.div_func, example=doc,
+                                               train_term_dist=doc_term_dist,
+                                               word2id=word2id, word2vec='')
+        for doc, doc_term_dist in zip(corpus, doc_term_dists)
+    )
+    corpus_f.close()
+
+    return diversity_scores
+
+
 def _rank_metric_and_select(scores: pd.Series,
                             args: argparse.Namespace) -> np.ndarray:
     """
@@ -326,67 +416,32 @@ def select_random(args: argparse.Namespace) -> np.ndarray:
     return selection_index
 
 
-def select_similar(args: argparse.Namespace) -> pd.Series:
+def select_similar(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least similar to a fine-tuning corpus."""
-    # Create a partial-ed function for conciseness
-    to_term_dist = partial(docs_to_term_dist,
-                           vocab_file=args.vocab_file,
-                           lowercase=args.lowercase,
-                           chunk_size=args.chunk_size)
-
-    # Get term distribution for fine-tune dataset
-    # Chain all FT docs into one huge doc to obtain a
-    # proper normalized term distribution
-    f = get_file_obj(args.fine_tune_text)
-    ft_text = [' '.join(line.strip() for line in f)]
-    ft_term_dist = to_term_dist(ft_text, level="corpus")
-    f.close()
-
-    # Get term distribution for each doc in the corpus
-    corpus_f = get_file_obj(args.corpus)
-    corpus_term_dists = to_term_dist(corpus_f, level="doc")
-
-    # Calculate similarity for each doc in corpus
-    similarities = pd.Series(
-        similarity.similarity_name2value(args.sim_func,
-                                         ft_term_dist, doc_term_dist)
-        for doc_term_dist in tqdm(corpus_term_dists,
-                                  desc=f'Computing {args.sim_func} similarities')
-    )
-    corpus_f.close()
-
+    similarities = calculate_similarity(args)
     return _rank_metric_and_select(similarities, args)
 
 
-def select_diverse(args: argparse.Namespace) -> pd.Series:
+def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
-    # Get term distribution for each doc in the corpus
-    corpus_f = get_file_obj(args.corpus)
-    corpus_f1, corpus_f2 = it.tee(corpus_f)
-
-    # Tokenize the corpus
-    corpus = docs_to_tokens(corpus_f1,
-                            vocab_file=args.vocab_file,
-                            lowercase=args.lowercase,
-                            chunk_size=args.chunk_size)
-
-    # Get a documnet-level term distribution
-    doc_term_dists = docs_to_term_dist(corpus_f2,
-                                       vocab_file=args.vocab_file,
-                                       lowercase=args.lowercase,
-                                       chunk_size=args.chunk_size, level='doc')
-
-    # Calculate diversity for each doc in the corpus
-    word2id = create_vocab(args.vocab_file).word2id
-    diversity_scores = pd.Series(
-        diversity.diversity_feature_name2value(args.div_func, example=doc,
-                                               train_term_dist=doc_term_dist,
-                                               word2id=word2id, word2vec='')
-        for doc, doc_term_dist in zip(corpus, doc_term_dists)
-    )
-    corpus_f.close()
-    
+    diversity_scores = calculate_diversity(args)
     return _rank_metric_and_select(diversity_scores, args)
+
+
+def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
+    """Select documents that are most / least (similar + diverse)."""
+    similarities = calculate_similarity(args)
+    diversity_scores = calculate_diversity(args)
+
+    # Ensure metrics are on the same scale before combining them
+    similarities = MinMaxScaler().fit_transform(similarities.values.reshape(-1, 1))
+    diversity_scores = MinMaxScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
+    # Calculate composite metric
+    sim_weight, div_weight = args.sim_div_weights
+    composite_metric = sim_weight * similarities + div_weight * diversity_scores
+    composite_metric = pd.Series(composite_metric.ravel())
+
+    return _rank_metric_and_select(composite_metric, args)
 
 
 def main(args: argparse.Namespace):
@@ -401,6 +456,8 @@ def main(args: argparse.Namespace):
         selection_index = select_similar(args)
     elif args.mode == 'diverse':
         selection_index = select_diverse(args)
+    elif args.mode == 'similar+diverse':
+        selection_index = select_similar_and_diverse(args)
     else:
         raise NotImplementedError
 
