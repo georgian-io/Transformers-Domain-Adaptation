@@ -1,4 +1,4 @@
-"""Test data selection module."""
+"""Unit tests for data selection module."""
 import shlex
 from typing import List
 from pathlib import Path
@@ -19,7 +19,6 @@ CORPUS = (
     'this is an apple',
     'These are documents and this is a banana'
 )
-FINE_TUNE_TEXT = ('an emu', 'this is an apple')
 VOCABULARY = ('a', 'apple', 'are', 'banana', 'carrot', 'document',
               'emu', 'is', 'this', 'these', '##d', '##n', '##s', '[UNK]')
 
@@ -153,36 +152,3 @@ def test_docs_to_term_dist_level_doc_correctness(documents, vocab_file):
     ])
     answers = answers / answers.sum(axis=1, keepdims=True)
     assert np.allclose(term_dists, answers)
-
-
-def test_integration_select_random_not_modified():
-    """Ensure that individual docs in subset corpus is not modified."""
-    pass
-
-def test_integration_select_random_correct_num_docs():
-    """Ensure that the correct number of docs are selected."""
-    pass
-
-def test_integration_select_similar_not_modified():
-    """Ensure that individual docs in subset corpus is not modified."""
-    pass
-
-def test_integration_select_similar_correct_num_docs():
-    """Ensure that the correct number of docs are selected."""
-    pass
-
-def test_integration_select_similar_correct_subset():
-    """Test that the corpus subset from `select_similar` is correct."""
-    pass
-
-def test_integration_select_diverse_not_modified():
-    """Ensure that individual docs in subset corpus is not modified."""
-    pass
-
-def test_integration_select_diverse_correct_num_docs():
-    """Ensure that the correct number of docs are selected."""
-    pass
-
-def test_integration_select_diverse_correct_subset():
-    """Test that the corpus subset from `select_diverse` is correct."""
-    pass
