@@ -41,7 +41,7 @@ aws s3 cp "$BUCKET/domains/biology/corpus/subsets/pubmed_corpus_${MOD}_diverse_e
 
 aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}_diverse" \
     "results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}_diverse" \
-    --recursive
+    --recursive --exclude "*/checkpoint*"
 
 # Update write permissions so other scripts can write into these folders
 sudo chmod -R 777 data

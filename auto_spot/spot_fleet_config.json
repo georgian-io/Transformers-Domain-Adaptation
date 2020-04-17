@@ -18,7 +18,7 @@
                 }
             }
           ],
-          "InstanceType": "p3.16xlarge",
+          "InstanceType": "p3.2xlarge",
           "TagSpecifications": [
               {
                   "ResourceType": "instance",

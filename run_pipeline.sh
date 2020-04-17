@@ -52,7 +52,7 @@ fi
     --batch-size 8 \
     --save-steps 2500 \
     --skip-augment-vocab \
-    --skip-fine-tune \
+    --skip-domain-pre-train \
     --distributed-train \
     -v $CONTINUE_ARG
 
