@@ -384,6 +384,8 @@ def select_diverse(args: argparse.Namespace) -> pd.Series:
                                                word2id=word2id, word2vec='')
         for doc, doc_term_dist in zip(corpus, doc_term_dists)
     )
+    corpus_f.close()
+    
     return _rank_metric_and_select(diversity_scores, args)
 
 
