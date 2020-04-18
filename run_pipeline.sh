@@ -3,11 +3,11 @@ BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
 MOD="similar"
-CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_0.02pct.txt"
+CORPUS="data/biology/corpus/subsets/pubmed_corpus_${MOD}_cosine_linnaeus_train_2pct.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
-OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}"
+OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}_cosine"
 MAX_STEPS="128194"
 CONTINUE="TRUE"
 
