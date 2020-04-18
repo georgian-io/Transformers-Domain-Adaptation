@@ -436,16 +436,16 @@ def select_similar(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least similar to a fine-tuning corpus."""
     cache_path = (
         args.dst / 'cache' / f'similar_{args.corpus.stem}_{args.sim_func}_'
-                             f'{args.fine_tune_text}.pkl'
+                             f'{args.fine_tune_text.stem}.pkl'
     )
     if not args.ignore_cache and cache_path.exists():
         logger.info(f'Using cache found at {cache_path}')
         similarities = pd.read_pickle(cache_path)
     else:
         similarities = calculate_similarity(args)
-        logger.info(f'Caching similarities at {cache_path}')
         cache_path.parent.mkdir(exist_ok=True, parents=True)
         similarities.to_pickle(cache_path)
+        logger.info(f'Cached similarity scores at {cache_path}')
     return _rank_metric_and_select(similarities, args)
 
 
@@ -458,16 +458,40 @@ def select_diverse(args: argparse.Namespace) -> np.ndarray:
         diversity_scores = pd.read_pickle(cache_path)
     else:
         diversity_scores = calculate_diversity(args)
-        logger.info(f'Cache diversity score at {cache_path}')
         cache_path.parent.mkdir(exist_ok=True, parents=True)
         diversity_scores.to_pickle(cache_path)
+        logger.info(f'Cached diversity scores at {cache_path}')
     return _rank_metric_and_select(diversity_scores, args)
 
 
 def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least (similar + diverse)."""
-    similarities = calculate_similarity(args)
-    diversity_scores = calculate_diversity(args)
+    # Parse cache file paths
+    cache_dir = args.dst / 'cache'
+    sim_cache = (
+        cache_dir / f'similar_{args.corpus.stem}_{args.sim_func}_'
+                    f'{args.fine_tune_text.stem}.pkl'
+    )
+    div_cache = cache_dir / f'diverse_{args.corpus.stem}.pkl'
+
+    if not args.ignore_cache and sim_cache.exists():
+        logger.info(f'Using similarity scores cache found at {sim_cache}')
+        similarities = pd.read_pickle(sim_cache)
+    else:
+        similarities = calculate_similarity(args)
+        sim_cache.parent.mkdir(exist_ok=True, parents=True)
+        similarities.to_pickle(sim_cache)
+        logger.info(f'Cached similarity scores at {sim_cache}')
+
+    if not args.ignore_cache and div_cache.exists():
+        logger.info(f'Using diversity scores cache found at {div_cache}')
+        diversity_scores = pd.read_pickle(div_cache)
+    else:
+        diversity_scores = calculate_diversity(args)
+        div_cache.parent.mkdir(exist_ok=True, parents=True)
+        diversity_scores.to_pickle(div_cache)
+        logger.info(f'Cached diversity scores at {div_cache}')
+
 
     # Calculate composite metric
     if args.fuse_by == 'linear_combination':

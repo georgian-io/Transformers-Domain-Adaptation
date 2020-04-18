@@ -222,3 +222,27 @@ def test_select_similar_diverse_correct_subset(tmp_path, corpus_file, vocab_file
         assert CORPUS[6] in docs_subset  # Not the best test
     else:
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1])
+
+
+def test_select_similar_diverse_cache_correctness(tmp_path, corpus_file,
+                                                  vocab_file,
+                                                  fine_tune_corpus_file):
+    """Test that the calculated similarities are cached properly."""
+    args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
+                       f'similar+diverse --fine-tune-text {fine_tune_corpus_file} '
+                       f'--sim-div-weights 1,1 '
+                       f'-v {vocab_file} -p 0.3')
+    args = select_data.parse_args(args)
+    select_data.main(args)
+
+    for metric in ('similar', 'diverse'):
+        cache_path = next((tmp_path / 'cache').rglob(f'*{metric}*.pkl'))
+        assert isinstance(cache_path, Path)
+
+        cache = pd.read_pickle(cache_path)
+        if metric == 'similar':
+            scores = select_data.calculate_similarity(args)
+        else:
+            scores = select_data.calculate_diversity(args)
+        assert isinstance(cache, pd.Series)
+        assert (cache.values == scores.values).all()
