@@ -3,6 +3,7 @@ import shlex
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
 from scripts.domain_adaptation import select_data
 
@@ -83,6 +84,24 @@ def test_select_similar_correct_subset(tmp_path, corpus_file, vocab_file,
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1])
 
 
+def test_select_similar_cache_correctness(tmp_path, corpus_file, vocab_file,
+                                          fine_tune_corpus_file):
+    """Test that the calculated similarities are cached properly."""
+    args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
+                       f'similar --fine-tune-text {fine_tune_corpus_file} '
+                       f'-v {vocab_file} -p 0.3')
+    args = select_data.parse_args(args)
+    select_data.main(args)
+
+    cache_path = next((tmp_path / 'cache').rglob('*.pkl'))
+    assert isinstance(cache_path, Path)
+
+    cache = pd.read_pickle(cache_path)
+    similarities = select_data.calculate_similarity(args)
+    assert isinstance(cache, pd.Series)
+    assert (cache.values == similarities.values).all()
+
+
 @pytest.mark.parametrize('invert', ['', '-i'])
 def test_select_diverse_not_modified(tmp_path, corpus_file, vocab_file, invert):
     """Ensure that individual docs in subset corpus is not modified."""
@@ -129,6 +148,23 @@ def test_select_diverse_correct_subset(tmp_path, corpus_file,
         assert tuple(docs_subset) == (CORPUS[4], CORPUS[5], CORPUS[6])
     else:
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1], CORPUS[2])
+
+
+def test_select_diverse_cache_correctness(tmp_path, corpus_file, vocab_file,
+                                          fine_tune_corpus_file):
+    """Test that the calculated similarities are cached properly."""
+    args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
+                       f'diverse -v {vocab_file} -p 0.5')
+    args = select_data.parse_args(args)
+    select_data.main(args)
+
+    cache_path = next((tmp_path / 'cache').rglob('*.pkl'))
+    assert isinstance(cache_path, Path)
+
+    cache = pd.read_pickle(cache_path)
+    diversity_scores = select_data.calculate_diversity(args)
+    assert isinstance(cache, pd.Series)
+    assert (cache.values == diversity_scores.values).all()
 
 
 @pytest.mark.parametrize('invert', ['', '-i'])

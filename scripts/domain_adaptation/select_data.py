@@ -39,6 +39,9 @@ def parse_args(raw_args: Optional[List[str]] = None):
                         help='Directory to save corpus subset')
     parser.add_argument('--filename', type=str, default=None,
                         help='Filename for corpus subset')
+    parser.add_argument('--ignore-cache', action='store_true',
+                        help='If True, do not use cache '
+                             '(applies to metric-based techniques).')
 
     # Args for "random" mode
     subparsers = parser.add_subparsers(help='Method to select subset of data',
@@ -418,13 +421,33 @@ def select_random(args: argparse.Namespace) -> np.ndarray:
 
 def select_similar(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least similar to a fine-tuning corpus."""
-    similarities = calculate_similarity(args)
+    cache_path = (
+        args.dst / 'cache' / f'similar_{args.corpus.stem}_{args.sim_func}_'
+                             f'{args.fine_tune_text}.pkl'
+    )
+    if not args.ignore_cache and cache_path.exists():
+        logger.info(f'Using cache found at {cache_path}')
+        similarities = pd.read_pickle(cache_path)
+    else:
+        similarities = calculate_similarity(args)
+        logger.info(f'Caching similarities at {cache_path}')
+        cache_path.parent.mkdir(exist_ok=True, parents=True)
+        similarities.to_pickle(cache_path)
     return _rank_metric_and_select(similarities, args)
 
 
 def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
-    diversity_scores = calculate_diversity(args)
+    cache_path = args.dst / 'cache' / f'diverse_{args.corpus.stem}.pkl'
+
+    if not args.ignore_cache and cache_path.exists():
+        logger.info(f'Using cache found at {cache_path}')
+        diversity_scores = pd.read_pickle(cache_path)
+    else:
+        diversity_scores = calculate_diversity(args)
+        logger.info(f'Cache diversity score at {cache_path}')
+        cache_path.parent.mkdir(exist_ok=True, parents=True)
+        diversity_scores.to_pickle(cache_path)
     return _rank_metric_and_select(diversity_scores, args)
 
 
