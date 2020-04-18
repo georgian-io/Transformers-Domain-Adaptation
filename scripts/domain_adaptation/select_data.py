@@ -114,9 +114,22 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--div-func', choices=DIVERSITY_FUNCTIONS,
                            default='entropy',
                            help='Diversity function to use')
+    subparser.add_argument('--fuse-by', choices=('linear_combination', 'union'),
+                           default='linear_combination',
+                           help='Method by which to combine similarity and '
+                                'diversity metrics. "linear_combination" '
+                                'combines both metrics using linear combination '
+                                'of weights supplied in `--sim-div-weights`. '
+                                'When using "union", the final corpus subset is '
+                                'a union of the most/least similar set of docs '
+                                'with the most/least diverse set of docs. '
+                                'As there may be overlap, the final corpus '
+                                'subset would likely differ from the specified '
+                                'amount of documents.')
     subparser.add_argument('-w', '--sim-div-weights', default=[1, 1],
                            type=lambda x: [float(w) for w in x.split(',')],
                            help='Weights for similarity and diversity metrics. '
+                                'Applies only if --fuse-by="linear_combination". '
                                 'Provide as a comma-separated string. '
                                 'For example, to compute 2 * sim + 0.5 * div, '
                                 'specify --sim-div-weights=2,0.5')
@@ -456,15 +469,29 @@ def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
     similarities = calculate_similarity(args)
     diversity_scores = calculate_diversity(args)
 
-    # Ensure metrics are on the same scale before combining them
-    similarities = MinMaxScaler().fit_transform(similarities.values.reshape(-1, 1))
-    diversity_scores = MinMaxScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
     # Calculate composite metric
-    sim_weight, div_weight = args.sim_div_weights
-    composite_metric = sim_weight * similarities + div_weight * diversity_scores
-    composite_metric = pd.Series(composite_metric.ravel())
+    if args.fuse_by == 'linear_combination':
+        # Ensure metrics are on the same scale before combining them
+        similarities = (
+            MinMaxScaler().fit_transform(similarities.values.reshape(-1, 1))
+        )
+        diversity_scores = (
+            MinMaxScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
+        )
 
-    return _rank_metric_and_select(composite_metric, args)
+        # Calculate composite metric using linear combination
+        sim_weight, div_weight = args.sim_div_weights
+        composite_metric = sim_weight * similarities + div_weight * diversity_scores
+        composite_metric = pd.Series(composite_metric.ravel())
+
+        return _rank_metric_and_select(composite_metric, args)
+    else:
+        sim_selection_index = _rank_metric_and_select(similarities, args)
+        div_selection_index = _rank_metric_and_select(diversity_scores, args)
+
+        # Get composite selection index using set union
+        composite_selection_index = sim_selection_index | div_selection_index
+        return composite_selection_index
 
 
 def main(args: argparse.Namespace):

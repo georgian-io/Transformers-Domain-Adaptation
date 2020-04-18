@@ -1,5 +1,6 @@
 """Integration tests for data selection module."""
 import shlex
+import itertools as it
 from pathlib import Path
 
 import pytest
@@ -167,13 +168,14 @@ def test_select_diverse_cache_correctness(tmp_path, corpus_file, vocab_file,
     assert (cache.values == diversity_scores.values).all()
 
 
-@pytest.mark.parametrize('invert', ['', '-i'])
+@pytest.mark.parametrize('invert,fuse_by', it.product(('', '-i'), ('linear_combination', 'union')))
 def test_select_similar_diverse_not_modified(tmp_path, corpus_file, vocab_file,
-                                             fine_tune_corpus_file, invert):
+                                             fine_tune_corpus_file, invert,
+                                             fuse_by):
     """Ensure that individual docs in subset corpus is not modified."""
     args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
                        f'similar+diverse --fine-tune-text {fine_tune_corpus_file} '
-                       f'-v {vocab_file} -p 0.3 {invert}')
+                       f'-v {vocab_file} -p 0.3 {invert} --fuse-by {fuse_by}')
     args = select_data.parse_args(args)
     select_data.main(args)
 
