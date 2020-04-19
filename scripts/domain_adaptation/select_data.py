@@ -170,6 +170,7 @@ def parse_filename(args: argparse.Namespace) -> str:
                                   for w in args.sim_div_weights]
         filename += f'_{sim_weight}_{args.sim_func}_{div_weight}_{args.div_func}'
         filename += f'_{args.fine_tune_text.stem}'
+        filename += f'_{args.fuse_by}'
     else:
         raise NotImplementedError
 
