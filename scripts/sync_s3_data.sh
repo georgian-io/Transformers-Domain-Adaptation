@@ -22,11 +22,11 @@ if ! [ -e results ]; then mkdir results; fi
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
 MOD="most"
-EXP_NAME="pubmed_${PCT}pct_${MOD}_sim_div"
+EXP_NAME="pubmed_${PCT}pct_${MOD}_sim_div_union"
 
 DATA_DIR="data/biology/corpus/subsets/"
-RESULTS_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_${MOD}_diverse/domain-pre-trained"
-CORPUS="pubmed_corpus_${MOD}_sim_div_1_0_jensen-shannon_1_0_entropy_linnaeus_train_2pct.txt"
+RESULTS_DIR="results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained"
+CORPUS="pubmed_corpus_${MOD}_sim_div_1_jensen-shannon_1_entropy_linnaeus_train_union_2pct.txt"
 mkdir -p $DATA_DIR
 mkdir -p $RESULTS_DIR
 
@@ -66,10 +66,12 @@ if [ $MODE = "dpt" ]; then
         "results/$FINE_TUNE_DATASET/$EXP_NAME" \
         --recursive --exclude="*.pt"
 
-    # Copy state dicts for latest checkpoint
-    latest_checkpoint="checkpoint-$(get_latest_checkpoint $BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/)"
-    aws s3 sync "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/$latest_checkpoint" \
-        "results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/$latest_checkpoint"
+    # Copy state dicts for latest checkpoint, if available
+    latest_checkpoint="$(get_latest_checkpoint $BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/)"
+    if ! [ -z $latest_checkpoint ]; then
+        aws s3 sync "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/$latest_checkpoint" \
+            "results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint"
+    fi
 else
     aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME" \
         "results/$FINE_TUNE_DATASET/$EXP_NAME" \
