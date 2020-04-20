@@ -13,9 +13,10 @@ from typing import List, Tuple, Iterable, Union, Optional
 
 import numpy as np
 import pandas as pd
+import dill as pickle
 from tqdm import tqdm
 from tokenizers import BertWordPieceTokenizer
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.utils.iter import batch
@@ -75,6 +76,9 @@ def parse_args(raw_args: Optional[List[str]] = None):
     metric_parser.add_argument('-v', '--vocab-file', type=Path,
                                default='bert-base-uncased-vocab.txt',
                                help='Vocabulary for tokenization')
+    metric_parser.add_argument('--use-tfidf', action='store_true',
+                               help='If True, compare similarities based on '
+                                    'TF-IDF instead of count distribution')
     metric_parser.add_argument('--tkn-chunk-size', type=int, default=2**13,
                                help='Tokenization chunk size')
     metric_parser.add_argument('--comp-chunk-size', type=int, default=128,
@@ -92,9 +96,6 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--sim-func', choices=SIMILARITY_FUNCTIONS,
                            default='jensen-shannon',
                            help='Similarity function to use')
-    subparser.add_argument('--use-tfidf', action='store_true',
-                           help='If True, compare similarities based on TF-IDF '
-                                'instead of count distribution')
 
     # Args for "diverse" mode
     subparser = subparsers.add_parser(
@@ -120,9 +121,6 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--div-func', choices=DIVERSITY_FUNCTIONS,
                            default='entropy',
                            help='Diversity function to use')
-    subparser.add_argument('--use-tfidf', action='store_true',
-                           help='If True, compare similarities based on TF-IDF '
-                                'instead of count distribution')
     subparser.add_argument('--fuse-by', choices=('linear_combination', 'union'),
                            default='linear_combination',
                            help='Method by which to combine similarity and '
@@ -200,217 +198,82 @@ def parse_filename(args: argparse.Namespace) -> str:
     return filename
 
 
-def get_file_obj(filepath: Union[str, Path]):
-    """Return a file object for streaming."""
-    logger.info(f'Reading {filepath}')
-
-    # Get the total number of lines for processing time estimates
-    with open(filepath) as f:
-        n_lines = sum(1 for _ in f)
-
-    return tqdm(open(filepath), desc='Reading', leave=False, total=n_lines)
-
-
-def copy_selected_docs(index: np.ndarray, args: argparse.Namespace) -> None:
-    """Create a subset corpus by copying selected documents."""
-    # Save corpus
-    logger.info(f'Saving subset corpus to {args.dst / args.filename}')
-    args.dst.mkdir(exist_ok=True, parents=True)
-    with open(args.corpus) as reader:
-        with open(args.dst / args.filename, 'w+') as writer:
-            # Read and sample
-            lines = (line for line, should_sample in zip(reader, index)
-                          if should_sample)
-
-            # Write
-            lines = tqdm(lines, desc='Writing',
-                         leave=False, total=index.sum())
-            list(writer.write(line) for line in lines)
-
-
-def create_vocab(vocab_file: Path) -> SimpleNamespace:
-    """Create a duck-type Vocabulary object.
-
-    The Vocabulary object is a user-defined object from the
-    `learn-to-select-data` repo. It is used in `similarity.get_term_dist`.
-
-    Arguments:
-        vocab_file {Path} -- Path to vocabulary file
-
-    Returns:
-        SimpleNamespace -- A duck-typed Vocabulary object
-    """
-    # Create a duck-typed Vocabulary object to work on `similarity.get_term_dist`.
-    vocab = vocab_file.read_text().splitlines()
-    vocab_obj = SimpleNamespace()
-    vocab_obj.size = len(vocab)
-    vocab_obj.word2id = {word: i for i, word in enumerate(vocab)}
-    return vocab_obj
-
-
-def docs_to_tokens(docs: Iterable[str],
-                   vocab_file: Path,
-                   lowercase: bool = True,
-                   chunk_size: int = 2**13,
-                  ) -> Iterable[List[str]]:
-    """Tokenize documents.
-
-    Arguments:
-        docs {Iterable[str]} -- Documents
-        vocab_file {Path} -- Path to vocabulary file
-        lowercase {bool} -- If True, performs lowercasing
-        chunk_size {int} -- Tokenization batch size
-
-    Returns:
-        Iterable[List[str]] -- A tokenized corpus
-    """
-    special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
-    tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=lowercase)
-
-    # Tokenize each document
-    tokenized: Iterable[List[str]] = (
-        enc.tokens[1:-1]
-        for b in batch(docs, chunk_size)
-        for enc in tokenizer.encode_batch(list(b))
-    )
-
-    # Filter out possible unknown tokens
-    tokenized = ([x for x in tokens if x not in special_tokens] for tokens in tokenized)
-    return tokenized
-
-
-def docs_to_tfidf(docs: Iterable[str],
-                  tokenizer_vocab_file: Path,
-                  level: str = 'corpus',
-                  tfidf_vect: Optional[TfidfVectorizer] = None,
-                 ) -> Tuple[np.ndarray, TfidfVectorizer]:
-    """Convert documents into TF-IDF vectors.
-
-    Arguments:
-        docs {Iterable[List[str]]} -- Raw documents
-        tokenizer_vocab_file {Path} -- Vocabulary to tokenize documents
-
-    Keyword Arguments:
-        level {str} -- Level at which to form TF-IDF.
-                       Valid values are {"corpus", "doc"}. If "corpus", create
-                       a corpus-level TFIDF vector. If "doc", create
-                       document-level TFIDF vectors (default: {'corpus'})
-        tfidf_vect {Optional[List[str]]}
-            -- A fitted TfidfVectorizer. If provided, transforms data with it.
-               Otherwise, fit a new TfidfVectorizer and transform `docs`
-               (default: {None})
-
-    Returns:
-        Tuple[np.ndarray, TfidfVectorizer] -- TFIDF vector(s)
-    """
-    def tokenize_and_clean(text: str, tokenizer: BertWordPieceTokenizer) -> List[str]:
-        """Tokenize and remove special BERT tokens."""
-        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
-        tokenized = tokenizer.encode(text).tokens[1:-1]
-        return [token for token in tokenized if token not in special_tokens]
-
-    if tfidf_vect is None:
-        tokenizer = BertWordPieceTokenizer(str(tokenizer_vocab_file),
-                                           lowercase=True)
-        tfidf_vect = TfidfVectorizer(lowercase=False,
-                                     norm='l1',  # To mimic a valid prob. dist.
-                                     tokenizer=lambda x: tokenize_and_clean(x, tokenizer))
-
-        # Create a duplicate iterator, otherwise `docs` would have been exhausted
-        docs, docs_ = it.tee(docs)
-
-        tfidf_vect.fit(docs_)
-
-    if level == 'corpus':
-        ret = tfidf_vect.transform([' '.join(docs)])
-    elif level == 'doc':
-        ret = tfidf_vect.transform(docs)
-    else:
-        raise ValueError(f'Invalid level {level} specified.')
-    return ret.toarray().squeeze(), tfidf_vect
-
-
-def docs_to_term_dist(docs: Iterable[str],
-                      vocab_file: Path,
-                      lowercase: bool = True,
-                      chunk_size: int = 2**13,
-                      level: str = 'corpus',
-                     ) -> Union[np.ndarray, Iterable[np.ndarray]]:
-    """Convert documents into term (token) distributions.
-
-    This is done by first tokenizing documents and then converting them into
-    distributions based on vocab available in `vocab_file`.
-
-    Arguments:
-        docs {Iterable[str]} -- Documents
-        vocab_file {Path} -- Path to vocabulary file
-
-    Keyword Arguments:
-        lowercase {bool} -- If True, perform lowercasing (default: {True})
-        chunk_size {int} -- Tokenization batch size (default: {2**13})
-        level {str} -- Level at which to form term distribution.
-                       Valid values are {"corpus", "doc"}. If "corpus", create
-                       a corpus-level term distribution. If "doc", create
-                       document-level term distributions (default: {'corpus'})
-
-    Raises:
-        ValueError: If an invalid value for `level` is provided
-
-    Returns:
-        Union[np.ndarray, Iterable[np.ndarray]] -- The term distribution(s)
-    """
-    tokenized = docs_to_tokens(docs=docs,
-                               vocab_file=vocab_file,
-                               lowercase=lowercase,
-                               chunk_size=chunk_size)
-
-    # Create a duck-typed Vocabulary object to work on `similarity.get_term_dist`
-    vocab_obj = create_vocab(vocab_file)
-
-    if level == 'corpus':
-        # Convert tokenized corpus into a corpus-level term distribution
-        term_dist: np.ndarray = (
-            similarity.get_term_dist(tokenized, vocab=vocab_obj, lowercase=lowercase)
-        )
-    elif level == 'doc':
-        # Convert tokenized docs into doc-level term distributions
-        term_dist: Iterable[np.ndarray] = (  # type: ignore
-            similarity.get_term_dist([x], vocab=vocab_obj, lowercase=lowercase)
-            for x in tokenized
-        )
-    else:
-        raise ValueError
-    return term_dist
-
-
 def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     """Compute similarities of documents on a fine-tune corpus."""
-    if args.use_tfidf:
-        return _calculate_similarity_tfidf(args)
-    else:
-        return _calculate_similarity_count(args)
+    similarities = (_calculate_similarity_tfidf(args) if args.use_tfidf else
+                    _calculate_similarity_count(args))
+
+    # Invert metrics so that high values correlates to high similarity
+    if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
+        similarities = -similarities
+
+    return similarities
 
 
 def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
     """Compute doc. similarities on a fine-tune corpus using TF-IDF."""
-    # Get tfidf vectors for each doc in the corpus
-    corpus_f = get_file_obj(args.corpus)
-    corpus_tfidf, vectorizer = docs_to_tfidf(corpus_f, args.vocab_file,
-                                             level='doc')
-    corpus_f.close()
+
+    def tokenize(docs: Iterable[str],
+                 vocab_file: Path,
+                 chunk_size: int = 2**13
+                ) -> Iterable[List[str]]:
+        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+        tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=True)
+        tokenized = (
+            [token for token in enc.tokens[1:-1] if token not in special_tokens]
+            for b in batch(docs, chunk_size)
+            for enc in tokenizer.encode_batch(list(b))
+        )
+        return tokenized
+
+
+    cached_tfidf = args.cache_folder / 'tfidf.pkl'
+
+    if cached_tfidf.exists():
+        logger.info(f'Loading TF-IDF vectorizer at {cached_tfidf}')
+        with open(cached_tfidf, 'rb') as f:
+            vectorizer = pickle.load(f)
+    else:
+        logger.info('Fitting the TF-IDF vectorizer on the corpus')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+        vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                    norm='l1',  # To mimic a valid prob. dist
+                                    tokenizer=lambda x: x)
+        vectorizer.fit(tokenized)
+        corpus_f.close()
+
+        with open(cached_tfidf, 'wb') as f:
+            pickle.dump(vectorizer, f)
+        logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
 
     # Get tfidf vector for fine-tune dataset
     f = get_file_obj(args.fine_tune_text)
-    ft_tfidf, _ = docs_to_tfidf(f, args.vocab_file, level='corpus',
-                                tfidf_vect=vectorizer)
+    tokenized_ft: Iterable[List[str]] = (
+        it.chain.from_iterable(tokenize(f, vocab_file=args.vocab_file))
+    )
+    ft_tfidf = vectorizer.transform([tokenized_ft]).toarray()
     f.close()
+
+    # Get tfidf vectors for each doc in the corpus
+    logger.info('Converting corpus to a TFIDF term distribution')
+    corpus_f = get_file_obj(args.corpus)
+
+    tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+    tokenized = tqdm(tokenized, desc=f'Computing {args.sim_func} similarities')
+
+    corpus_tfidfs = (vectorizer.transform(docs).toarray()
+                     for docs in batch(tokenized, args.comp_chunk_size))
 
     # Calculate similarities for each doc
     similarities = pd.Series(
-        similarity.similarity_name2value(args.sim_func, ft_tfidf, doc_tfidf)
-        for doc_tfidf in tqdm(corpus_tfidf,
-                              desc=f'Computing {args.sim_func} similarities')
+        it.chain.from_iterable(
+            similarity.similarity_name2value_fast(args.sim_func,
+                                                  ft_tfidf, doc_tfidfs)
+            for doc_tfidfs in corpus_tfidfs
+        )
     )
+    corpus_f.close()
 
     return similarities
 
@@ -448,14 +311,92 @@ def _calculate_similarity_count(args: argparse.Namespace) -> pd.Series:
     )
     corpus_f.close()
 
-    # Invert metrics so that high values correlates to high similarity
-    if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
-        similarities = -similarities
-
     return similarities
 
 
 def calculate_diversity(args: argparse.Namespace) -> pd.Series:
+    diversity_scores = (_calculate_diversity_tfidf(args) if args.use_tfidf else
+                        _calculate_diversity_count(args))
+
+    # Invert metrics so that high values correlates to high diversity
+    if args.div_func == 'type_token_ratio':
+        diversity_scores = -diversity_scores
+
+    return diversity_scores
+
+
+def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
+    def tokenize(docs: Iterable[str],
+                 vocab_file: Path,
+                 chunk_size: int = 2**13
+                ) -> Iterable[List[str]]:
+        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+        tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=True)
+        tokenized = (
+            [token for token in enc.tokens[1:-1] if token not in special_tokens]
+            for b in batch(docs, chunk_size)
+            for enc in tokenizer.encode_batch(list(b))
+        )
+        return tokenized
+
+    # Obtain a fitted TF-IDF vectorizer
+    cached_tfidf = args.cache_folder / 'tfidf.pkl'
+    if cached_tfidf.exists():
+        logger.info(f'Loading TF-IDF vectorizer at {cached_tfidf}')
+        with open(cached_tfidf, 'rb') as f:
+            vectorizer = pickle.load(f)
+    else:
+        logger.info('Fitting the TF-IDF vectorizer on the corpus')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+        vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                    norm='l1',  # To mimic a valid prob. dist
+                                    tokenizer=lambda x: x)
+        vectorizer.fit(tokenized)
+        corpus_f.close()
+
+        with open(cached_tfidf, 'wb') as f:
+            pickle.dump(vectorizer, f)
+        logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
+
+    # Get a corpus tfidf
+    corpus_tfidf_cache = args.cache_folder / f'{args.corpus.stem}_tfidf_repr.npy'
+    if corpus_tfidf_cache.exists():
+        logger.info(f'Loading cached TF-IDF representation of corpus at {corpus_tfidf_cache}')
+        corpus_tfidf = np.load(corpus_tfidf_cache)
+    else:
+        logger.info('Transforming corpus to a TF-IDF representation')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized_corpus: Iterable[List[str]] = (
+            it.chain.from_iterable(tokenize(corpus_f, vocab_file=args.vocab_file))
+        )
+        corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray().squeeze()
+        corpus_f.close()
+
+        np.save(corpus_tfidf_cache, corpus_tfidf)
+        logger.info(f'TF-IDF representation of corpus cached at {corpus_tfidf_cache}')
+
+    # Tokenize the corpus
+    corpus_f = get_file_obj(args.corpus)
+    corpus = docs_to_tokens(corpus_f,
+                            vocab_file=args.vocab_file,
+                            lowercase=args.lowercase,
+                            chunk_size=args.tkn_chunk_size)
+
+    # Calculate diversity for each doc in the corpus
+    diversity_scores = pd.Series(
+        diversity.diversity_feature_name2value(args.div_func, example=doc,
+                                               train_term_dist=corpus_tfidf,
+                                               word2id=vectorizer.vocabulary_,
+                                               word2vec='')
+        for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
+    )
+    corpus_f.close()
+
+    return diversity_scores
+
+
+def _calculate_diversity_count(args: argparse.Namespace) -> pd.Series:
     """Compute intra-document diversity."""
     term_dist_cache = (
         args.cache_folder
@@ -495,10 +436,6 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     )
     corpus_f.close()
 
-    # Invert metrics so that high values correlates to high diversity
-    if args.div_func == 'type_token_ratio':
-        diversity_scores = -diversity_scores
-
     return diversity_scores
 
 
@@ -536,24 +473,6 @@ def _rank_metric_and_select(scores: pd.Series,
     return selection_index
 
 
-def select_random(args: argparse.Namespace) -> np.ndarray:
-    """Randomly select documents."""
-    f = get_file_obj(args.corpus)
-    n_lines = sum(1 for _ in f)
-    f.close()
-
-    # Get a random subset of lines
-    logger.info(f'Randomly sampling {args.pct} of corpus with '
-                f'a seed of {args.seed}')
-    np.random.seed(args.seed)
-    selection_index = (
-        np.random.choice([0, 1], size=(n_lines,),
-                         p=[1 - args.pct, args.pct])
-        .astype(bool)
-    )
-    return selection_index
-
-
 def select_similar(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least similar to a fine-tuning corpus."""
     cache_path = (
@@ -575,7 +494,8 @@ def select_similar(args: argparse.Namespace) -> np.ndarray:
 def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
     cache_path = (
-        args.cache_folder / f'diverse_{args.corpus.stem}_{args.div_func}.pkl'
+        args.cache_folder / f'diverse_{"tfidf" if args.use_tfidf else "count"}_'
+                            f'{args.corpus.stem}_{args.div_func}.pkl'
     )
 
     if not args.ignore_cache and cache_path.exists():
@@ -621,10 +541,10 @@ def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
     if args.fuse_by == 'linear_combination':
         # Ensure metrics are on the same scale before combining them
         similarities = (
-            RobustScaler().fit_transform(similarities.values.reshape(-1, 1))
+            MinMaxScaler().fit_transform(similarities.values.reshape(-1, 1))
         )
         diversity_scores = (
-            RobustScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
+            MinMaxScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
         )
 
         # Calculate composite metric using linear combination

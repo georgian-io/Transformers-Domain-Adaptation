@@ -6,6 +6,7 @@ from collections import Iterable
 
 import pytest
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from scripts.domain_adaptation import select_data
 
@@ -152,3 +153,57 @@ def test_docs_to_term_dist_level_doc_correctness(documents, vocab_file):
     ])
     answers = answers / answers.sum(axis=1, keepdims=True)
     assert np.allclose(term_dists, answers)
+
+
+def test_docs_to_tfidf_invalid_level(documents, vocab_file):
+    """Ensure that error is raised if an invalid level arg is specified."""
+    with pytest.raises(ValueError):
+        select_data.docs_to_tfidf(documents, vocab_file, level='invalid-level-123')
+
+
+def test_docs_to_tfidf_level_corpus_type(documents, vocab_file):
+    """Test the output types of `docs_to_tfidf`'s output when level='corpus'."""
+    term_dist, vectorizer = select_data.docs_to_tfidf(documents, vocab_file,
+                                                      level='corpus')
+    assert isinstance(term_dist, np.ndarray)
+    assert term_dist.shape == (len(VOCABULARY) - 1,)  # Without '[UNK]'
+
+    assert isinstance(vectorizer, TfidfVectorizer)
+    assert hasattr(vectorizer, 'vocabulary_')
+    assert hasattr(vectorizer, 'idf_')
+
+
+# def test_docs_to_tfidf_level_corpus_correctness(documents, vocab_file):
+#     """Test the output correctness of `docs_to_tfidf` when level=corpus."""
+#     term_dist, vectorizer = select_data.docs_to_tfidf(documents, vocab_file, level='corpus')
+#     import pdb; pdb.set_trace()
+#     answer = np.array([3, 16, 1, 5, 3, 3, 1, 2, 2, 1, 1, 2, 1, 0]) / (1 + np.log(2))
+#     assert np.allclose(term_dist, answer)
+
+
+def test_docs_to_tfidf_level_doc_type(documents, vocab_file):
+    """Test the output types of `docs_to_tfidf`'s output when level='doc'."""
+    term_dist, vectorizer = select_data.docs_to_tfidf(documents, vocab_file,
+                                                      level='doc')
+    assert isinstance(term_dist, np.ndarray)
+    assert term_dist.shape == (len(documents), len(VOCABULARY) - 1)  # Without '[UNK]'
+
+    assert isinstance(vectorizer, TfidfVectorizer)
+    assert hasattr(vectorizer, 'vocabulary_')
+    assert hasattr(vectorizer, 'idf_')
+
+
+# def test_docs_to_tfidf_level_doc_correctness(documents, vocab_file):
+#     """Test the output correctness of `docs_to_tfidf` when level=corpus."""
+#     term_dists, _ = select_data.docs_to_tfidf(documents, vocab_file, level='doc')
+#     answers = np.array([
+#         [0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#         [0, 4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#         [0, 3, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+#         [0, 2, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+#         [0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+#         [1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0],
+#         [2, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0]
+#     ])
+#     answers = answers / answers.sum(axis=1, keepdims=True)
+#     assert np.allclose(term_dists, answers)

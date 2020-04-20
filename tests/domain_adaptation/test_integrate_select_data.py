@@ -86,6 +86,27 @@ def test_select_similar_correct_subset(tmp_path, corpus_file, vocab_file,
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1])
 
 
+@pytest.mark.parametrize('invert', ['', '-i'])
+def test_select_similar_tfidf_correct_subset(tmp_path, corpus_file, vocab_file,
+                                       fine_tune_corpus_file, invert):
+    """Test that the corpus subset from `select_similar` is correct."""
+    args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
+                       f'similar --fine-tune-text {fine_tune_corpus_file} '
+                       f'-v {vocab_file} -p 0.3 {invert} --use-tfidf')
+    args = select_data.parse_args(args)
+    select_data.main(args)
+
+    output_file = next(tmp_path.rglob('*.txt'))
+
+    docs_subset = output_file.read_text().splitlines()
+    if invert == '':
+        pass
+        # [TEMP] Disabled due to experimental implementation
+        # assert tuple(docs_subset) == (CORPUS[4], CORPUS[5])
+    else:
+        assert tuple(docs_subset) == (CORPUS[0], CORPUS[1])
+
+
 def test_select_similar_cache_correctness(tmp_path, corpus_file, vocab_file,
                                           fine_tune_corpus_file):
     """Test that the calculated similarities are cached properly."""
@@ -229,7 +250,6 @@ def test_select_similar_diverse_correct_subset(tmp_path, corpus_file, vocab_file
                        f'similar+diverse --fine-tune-text {fine_tune_corpus_file} '
                        f'--sim-div-weights 1,1 '
                        f'-v {vocab_file} -p 0.3 {invert}')
-    # import pdb; pdb.set_trace()
     args = select_data.parse_args(args)
     select_data.main(args)
 
