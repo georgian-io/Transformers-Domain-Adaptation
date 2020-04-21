@@ -146,7 +146,7 @@ def test_select_diverse_correct_subset(tmp_path, corpus_file,
     output_file = next(tmp_path.rglob('*.txt'))
     docs_subset = output_file.read_text().splitlines()
     if invert == '':
-        assert tuple(docs_subset) == (CORPUS[4], CORPUS[5], CORPUS[6])
+        assert tuple(docs_subset) == (CORPUS[3], CORPUS[4], CORPUS[6])
     else:
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1], CORPUS[2])
 

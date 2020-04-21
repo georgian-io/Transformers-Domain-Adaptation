@@ -362,11 +362,12 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
                             lowercase=args.lowercase,
                             chunk_size=args.chunk_size)
 
-    # Get a documnet-level term distribution
-    doc_term_dists = docs_to_term_dist(corpus_f2,
-                                       vocab_file=args.vocab_file,
-                                       lowercase=args.lowercase,
-                                       chunk_size=args.chunk_size, level='doc')
+    # Get a document-level term distribution
+    doc_term_dist = docs_to_term_dist(corpus_f2,
+                                      vocab_file=args.vocab_file,
+                                      lowercase=args.lowercase,
+                                      chunk_size=args.chunk_size,
+                                      level='corpus')
 
     # Calculate diversity for each doc in the corpus
     word2id = create_vocab(args.vocab_file).word2id
@@ -374,7 +375,7 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
         diversity.diversity_feature_name2value(args.div_func, example=doc,
                                                train_term_dist=doc_term_dist,
                                                word2id=word2id, word2vec='')
-        for doc, doc_term_dist in zip(corpus, doc_term_dists)
+        for doc in corpus
     )
     corpus_f.close()
 
