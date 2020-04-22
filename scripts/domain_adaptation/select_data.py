@@ -453,7 +453,9 @@ def select_similar(args: argparse.Namespace) -> np.ndarray:
 
 def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
-    cache_path = args.dst / 'cache' / f'diverse_{args.corpus.stem}.pkl'
+    cache_path = (
+        args.dst / 'cache' / f'diverse_{args.corpus.stem}_{args.div_func}.pkl'
+    )
 
     if not args.ignore_cache and cache_path.exists():
         logger.info(f'Using cache found at {cache_path}')
