@@ -295,6 +295,7 @@ if __name__ == '__main__':
 
     # Train and save in-domain corpora as text file
     tokenizer = train_tokenizer(args.corpus,
+                                vocab_size=args.vocab_size,
                                 overwrite=args.overwrite_cache,
                                 lowercase=args.lowercase,
                                 dst=args.dst,
