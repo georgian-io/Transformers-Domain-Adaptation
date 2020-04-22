@@ -6,6 +6,6 @@ seqeval==0.0.12
 transformers==2.4.1
 tensorboard==2.1.0
 tensorboardX==2.0
-tokenizers==0.4.2
+tokenizers==0.7.0
 torch==1.4.0
 tqdm==4.42.1
