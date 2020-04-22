@@ -352,28 +352,27 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
 
 def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     """Compute intra-document diversity."""
-    # Get term distribution for each doc in the corpus
-    corpus_f = get_file_obj(args.corpus)
-    corpus_f1, corpus_f2 = it.tee(corpus_f)
-
-    # Tokenize the corpus
-    corpus = docs_to_tokens(corpus_f1,
-                            vocab_file=args.vocab_file,
-                            lowercase=args.lowercase,
-                            chunk_size=args.chunk_size)
-
     # Get a document-level term distribution
-    doc_term_dist = docs_to_term_dist(corpus_f2,
+    corpus_f = get_file_obj(args.corpus)
+    corpus_term_dist = docs_to_term_dist(corpus_f,
                                       vocab_file=args.vocab_file,
                                       lowercase=args.lowercase,
                                       chunk_size=args.chunk_size,
                                       level='corpus')
+    corpus_f.close()
+
+    # Tokenize the corpus
+    corpus_f = get_file_obj(args.corpus)
+    corpus = docs_to_tokens(corpus_f,
+                            vocab_file=args.vocab_file,
+                            lowercase=args.lowercase,
+                            chunk_size=args.chunk_size)
 
     # Calculate diversity for each doc in the corpus
     word2id = create_vocab(args.vocab_file).word2id
     diversity_scores = pd.Series(
         diversity.diversity_feature_name2value(args.div_func, example=doc,
-                                               train_term_dist=doc_term_dist,
+                                               train_term_dist=corpus_term_dist,
                                                word2id=word2id, word2vec='')
         for doc in corpus
     )
