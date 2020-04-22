@@ -374,7 +374,7 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
         diversity.diversity_feature_name2value(args.div_func, example=doc,
                                                train_term_dist=corpus_term_dist,
                                                word2id=word2id, word2vec='')
-        for doc in corpus
+        for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
     )
     corpus_f.close()
 
