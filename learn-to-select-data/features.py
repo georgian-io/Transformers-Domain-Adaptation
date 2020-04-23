@@ -4,6 +4,7 @@ Methods for generating features that can be used for Bayesian Optimization.
 import numpy as np
 
 import similarity
+import diversity_fast
 from constants import SIMILARITY_FUNCTIONS, DIVERSITY_FEATURES
 
 
@@ -152,6 +153,32 @@ def diversity_feature_name2value(f_name, example, train_term_dist, word2id,
     raise ValueError('%s is not a valid feature name.' % f_name)
 
 
+def diversity_feature_name2value_fast(f_name, example, train_term_dist, word2id,
+                                      word2vec):
+    """
+    Given a feature name, return the corresponding feature value.
+    :param f_name: the name of the feature
+    :param example: the tokenised example document
+    :param train_term_dist: the term distribution of the training data
+    :param word2id: the word-to-id mapping
+    :param word2vec: a mapping of a word to its word vector representation (e.g. GloVe or word2vec)
+    :return: the value of the corresponding feature
+    """
+    if f_name == 'num_word_types':
+        return diversity_fast.number_of_word_types(example)
+    if f_name == 'type_token_ratio':
+        return diversity_fast.type_token_ratio(example)
+    if f_name == 'entropy':
+        return diversity_fast.entropy(example, train_term_dist, word2id)
+    if f_name == 'simpsons_index':
+        return diversity_fast.simpsons_index(example, train_term_dist, word2id)
+    if f_name == 'quadratic_entropy':
+        return diversity_fast.quadratic_entropy(example, train_term_dist, word2id, word2vec)
+    if f_name == 'renyi_entropy':
+        return diversity_fast.renyi_entropy(example, train_term_dist, word2id)
+    raise ValueError('%s is not a valid feature name.' % f_name)
+
+
 def number_of_word_types(example):
     """Counts the number of word types of the example."""
     return len(set(example))
@@ -159,6 +186,8 @@ def number_of_word_types(example):
 
 def type_token_ratio(example):
     """Calculates the type-token ratio of the example."""
+    if not len(example):
+        return 0
     return number_of_word_types(example) / len(example)
 
 
@@ -174,6 +203,8 @@ def entropy(example, train_term_dist, word2id):
 
 def simpsons_index(example, train_term_dist, word2id):
     """Calculates Simpson's Index (https://en.wikipedia.org/wiki/Diversity_index#Simpson_index)."""
+    if not len(example):
+        return 0
     score = np.sum([np.power(train_term_dist[word2id[word]], 2) if word in word2id else 0
                     for word in set(example)])
     return score
@@ -183,19 +214,40 @@ def quadratic_entropy(example, train_term_dist, word2id, word2vec):
     """Calculates Quadratic Entropy."""
     assert word2vec is not None, ('Error: Word vector representations have to '
                                   'be available for quadratic entropy.')
-    summed = 0
-    for word_1 in set(example):
-        if word_1 not in word2id or word_1 not in word2vec:
-            continue  # continue as the product will be 0
-        for word_2 in set(example):
-            if word_2 not in word2id or word_2 not in word2vec:
-                continue  # continue as the product will be 0
-            p_1 = train_term_dist[word2id[word_1]]
-            p_2 = train_term_dist[word2id[word_2]]
-            vec_1 = word2vec[word_1]
-            vec_2 = word2vec[word_2]
-            sim = similarity.cosine_similarity(vec_1, vec_2)
-            summed += sim * p_1 * p_2
+
+    if not len(example):
+        return 0
+
+    # Only retain words that exist in both `word2id` and `word2vec` since
+    # the product will be 0 otherwise
+    example = {word for word in example
+                    if (word in word2id and word in word2vec)}
+
+    # Get probabiltiies
+    word_ids = [word2id[word] for word in example]
+    p = train_term_dist[word_ids]  # (N,)
+    p_mat = p.reshape(-1, 1) * p.reshape(1, -1)  # (N, N)
+
+    # Get embeddings
+    vec = np.array([word2vec[word] for word in example])  # (N, D)
+
+    def cosine_similarity_vect(vec: np.ndarray) -> np.ndarray:
+        """Calculate cosine_similarity (vectorized).
+
+        Arguments:
+            vec {np.ndarray} -- Embeddings (N x D)
+
+        Returns:
+            np.ndarray -- Pairwise cosine similarities (N x N)
+        """
+        N, D = vec.shape
+        uv = (vec.reshape(N, 1, D) * vec.reshape(1, N, D)).mean(axis=-1)
+        uu = (vec**2).mean(axis=-1)
+        vv = (vec**2).mean(axis=-1)
+        dist = uv / np.sqrt(uu.reshape(N, 1) * vv.reshape(1, N))
+        return dist
+
+    summed = (cosine_similarity_vect(vec) * p_mat).sum()
     return summed
 
 
