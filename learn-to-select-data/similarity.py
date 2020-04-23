@@ -13,6 +13,8 @@ import numpy as np
 import scipy.stats
 import scipy.spatial.distance
 
+import similarity_fast
+
 
 # SIMILARITY MEASURES
 
@@ -91,6 +93,28 @@ def similarity_name2value(s_name, repr1, repr2):
         return kl_divergence(repr1, repr2)
     if s_name == 'bhattacharyya':
         return bhattacharyya_distance(repr1, repr2)
+    raise ValueError('%s is not a valid feature name.' % s_name)
+
+
+def similarity_name2value_fast(s_name, repr1, repr2):
+    """
+    A highly vectorized implementation of `similarity_name2value`.
+
+    Returns:
+        np.ndarray -- Results of shape (N,)
+    """
+    if s_name == 'jensen-shannon':
+        return similarity_fast.jensen_shannon_divergence_fast(repr1, repr2)
+    if s_name == 'renyi':
+        return similarity_fast.renyi_divergence_fast(repr1, repr2)
+    if s_name == 'cos' or s_name == 'cosine':
+        return similarity_fast.cosine_similarity_fast(repr1, repr2)
+    if s_name == 'euclidean':
+        return similarity_fast.euclidean_distance_fast(repr1, repr2)
+    if s_name == 'variational':
+        return similarity_fast.variational_distance_fast(repr1, repr2)
+    if s_name == 'bhattacharyya':
+        return similarity_fast.bhattacharyya_distance_fast(repr1, repr2)
     raise ValueError('%s is not a valid feature name.' % s_name)
 
 
