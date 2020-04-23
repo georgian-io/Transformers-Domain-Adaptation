@@ -74,8 +74,10 @@ def parse_args(raw_args: Optional[List[str]] = None):
     metric_parser.add_argument('-v', '--vocab-file', type=Path,
                                default='bert-base-uncased-vocab.txt',
                                help='Vocabulary for tokenization')
-    metric_parser.add_argument('-c', '--chunk-size', type=int, default=2**13,
+    metric_parser.add_argument('--tkn-chunk-size', type=int, default=2**13,
                                help='Tokenization chunk size')
+    metric_parser.add_argument('--comp-chunk-size', type=int, default=128,
+                               help='Metric computation chunk size')
 
     # Args for "similarity" mode
     subparser = subparsers.add_parser(
@@ -324,26 +326,30 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     to_term_dist = partial(docs_to_term_dist,
                            vocab_file=args.vocab_file,
                            lowercase=args.lowercase,
-                           chunk_size=args.chunk_size)
+                           chunk_size=args.tkn_chunk_size)
 
     # Get term distribution for fine-tune dataset
     # Chain all FT docs into one huge doc to obtain a
     # proper normalized term distribution
     f = get_file_obj(args.fine_tune_text)
     ft_text = [' '.join(line.strip() for line in f)]
-    ft_term_dist = to_term_dist(ft_text, level="corpus")
+    ft_term_dist = to_term_dist(ft_text, level="corpus").reshape(1, -1)
     f.close()
 
     # Get term distribution for each doc in the corpus
     corpus_f = get_file_obj(args.corpus)
     corpus_term_dists = to_term_dist(corpus_f, level="doc")
+    corpus_term_dists = tqdm(corpus_term_dists,
+                             desc=f'Computing {args.sim_func} similarities')
 
     # Calculate similarity for each doc in corpus
     similarities = pd.Series(
-        similarity.similarity_name2value(args.sim_func,
-                                         ft_term_dist, doc_term_dist)
-        for doc_term_dist in tqdm(corpus_term_dists,
-                                  desc=f'Computing {args.sim_func} similarities')
+        it.chain.from_iterable(
+            similarity.similarity_name2value_fast(args.sim_func,
+                                                  ft_term_dist,
+                                                  np.array(doc_term_dists))
+            for doc_term_dists in batch(corpus_term_dists, args.comp_chunk_size)
+        )
     )
     corpus_f.close()
 
@@ -355,10 +361,10 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     # Get a document-level term distribution
     corpus_f = get_file_obj(args.corpus)
     corpus_term_dist = docs_to_term_dist(corpus_f,
-                                      vocab_file=args.vocab_file,
-                                      lowercase=args.lowercase,
-                                      chunk_size=args.chunk_size,
-                                      level='corpus')
+                                         vocab_file=args.vocab_file,
+                                         lowercase=args.lowercase,
+                                         chunk_size=args.tkn_chunk_size,
+                                         level='corpus')
     corpus_f.close()
 
     # Tokenize the corpus
@@ -366,7 +372,7 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     corpus = docs_to_tokens(corpus_f,
                             vocab_file=args.vocab_file,
                             lowercase=args.lowercase,
-                            chunk_size=args.chunk_size)
+                            chunk_size=args.tkn_chunk_size)
 
     # Calculate diversity for each doc in the corpus
     word2id = create_vocab(args.vocab_file).word2id
