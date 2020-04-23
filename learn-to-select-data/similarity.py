@@ -104,17 +104,17 @@ def similarity_name2value_fast(s_name, repr1, repr2):
         np.ndarray -- Results of shape (N,)
     """
     if s_name == 'jensen-shannon':
-        return similarity_fast.jensen_shannon_divergence_fast(repr1, repr2)
+        return similarity_fast.jensen_shannon_divergence(repr1, repr2)
     if s_name == 'renyi':
-        return similarity_fast.renyi_divergence_fast(repr1, repr2)
+        return similarity_fast.renyi_divergence(repr1, repr2)
     if s_name == 'cos' or s_name == 'cosine':
-        return similarity_fast.cosine_similarity_fast(repr1, repr2)
+        return similarity_fast.cosine_similarity(repr1, repr2)
     if s_name == 'euclidean':
-        return similarity_fast.euclidean_distance_fast(repr1, repr2)
+        return similarity_fast.euclidean_distance(repr1, repr2)
     if s_name == 'variational':
-        return similarity_fast.variational_distance_fast(repr1, repr2)
+        return similarity_fast.variational_distance(repr1, repr2)
     if s_name == 'bhattacharyya':
-        return similarity_fast.bhattacharyya_distance_fast(repr1, repr2)
+        return similarity_fast.bhattacharyya_distance(repr1, repr2)
     raise ValueError('%s is not a valid feature name.' % s_name)
 
 

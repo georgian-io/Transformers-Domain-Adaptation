@@ -5,7 +5,7 @@ import scipy.spatial.distance
 
 # SIMILARITY MEASURES
 
-def jensen_shannon_divergence_fast(repr1, repr2):
+def jensen_shannon_divergence(repr1, repr2):
     """Calculates Jensen-Shannon divergence (https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence)."""
     if len(repr1) == 1:
         repr1 = np.repeat(repr1, len(repr2), axis=0)
@@ -20,7 +20,7 @@ def jensen_shannon_divergence_fast(repr1, repr2):
     return sim
 
 
-def renyi_divergence_fast(repr1, repr2, alpha=0.99):
+def renyi_divergence(repr1, repr2, alpha=0.99):
     """Calculates Renyi divergence (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#R.C3.A9nyi_divergence)."""
     log_sum = (np.power(repr1, alpha) / np.power(repr2, alpha - 1)).sum(axis=-1)
     sim = 1 / (alpha - 1) * np.log(log_sum)
@@ -30,7 +30,7 @@ def renyi_divergence_fast(repr1, repr2, alpha=0.99):
     return sim
 
 
-def cosine_similarity_fast(repr1, repr2):
+def cosine_similarity(repr1, repr2):
     """Calculates cosine similarity (https://en.wikipedia.org/wiki/Cosine_similarity)."""
     if len(repr1) == 1:
         repr1 = np.repeat(repr1, len(repr2), axis=0)
@@ -46,17 +46,17 @@ def cosine_similarity_fast(repr1, repr2):
     return sim
 
 
-def euclidean_distance_fast(repr1, repr2):
+def euclidean_distance(repr1, repr2):
     """Calculates Euclidean distance (https://en.wikipedia.org/wiki/Euclidean_distance)."""
     return np.sqrt(((repr1 - repr2)**2).sum(axis=-1))
 
 
-def variational_distance_fast(repr1, repr2):
+def variational_distance(repr1, repr2):
     """Also known as L1 or Manhattan distance (https://en.wikipedia.org/wiki/Taxicab_geometry)."""
     return np.abs(repr1 - repr2).sum(axis=-1)
 
 
-def bhattacharyya_distance_fast(repr1, repr2):
+def bhattacharyya_distance(repr1, repr2):
     """Calculates Bhattacharyya distance (https://en.wikipedia.org/wiki/Bhattacharyya_distance)."""
     sim = - np.log(np.sqrt(repr1 * repr2).sum(axis=-1))
     assert not np.isnan(sim).any(), 'Error: Similarity is nan.'
