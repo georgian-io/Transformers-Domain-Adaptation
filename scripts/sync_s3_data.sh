@@ -69,7 +69,7 @@ if [ $MODE = "dpt" ]; then
     # Copy state dicts for latest checkpoint, if available
     latest_checkpoint="$(get_latest_checkpoint $BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/)"
     if ! [ -z $latest_checkpoint ]; then
-        aws s3 sync "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/$latest_checkpoint" \
+        aws s3 sync "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint" \
             "results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint"
     fi
 else
