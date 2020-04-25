@@ -10,7 +10,7 @@ def number_of_word_types(example):
 def type_token_ratio(example):
     """Calculates the type-token ratio of the example."""
     if not len(example):
-        return 0
+        return 1
     return number_of_word_types(example) / len(example)
 
 
