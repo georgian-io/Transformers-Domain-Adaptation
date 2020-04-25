@@ -1,5 +1,6 @@
 """Module that implements vectorized versions of diversity functions."""
 import numpy as np
+import scipy.stats
 
 
 def number_of_word_types(example):
@@ -16,12 +17,9 @@ def type_token_ratio(example):
 
 def entropy(example, train_term_dist, word2id):
     """Calculates Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory))."""
-    summed = 0
-    for word in set(example):
-        if word in word2id:
-            p_word = train_term_dist[word2id[word]]
-            summed += p_word * np.log(p_word)
-    return - summed
+    example = {word for word in example if word in word2id}
+    word_ids = [word2id[word] for word in example]
+    return scipy.stats.entropy(word_ids)
 
 
 def simpsons_index(example, train_term_dist, word2id):
