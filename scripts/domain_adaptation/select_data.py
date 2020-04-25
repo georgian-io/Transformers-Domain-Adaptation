@@ -148,6 +148,10 @@ def parse_args(raw_args: Optional[List[str]] = None):
     if args.pct is not None and not 0 < args.pct <= 1:
         raise ValueError(f'Invalid percentage value of {args.pct} provided')
 
+    # Create cache folder
+    args.cache_folder = args.dst / 'cache'
+    args.cache_folder.mkdir(exist_ok=True, parents=True)
+
     return args
 
 
@@ -362,14 +366,24 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
 
 def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     """Compute intra-document diversity."""
+    term_dist_cache = (
+        args.cache_folder
+        / f'term_dist_{args.corpus.stem}_{args.vocab_file.stem}.npy'
+    )
     # Get a document-level term distribution
-    corpus_f = get_file_obj(args.corpus)
-    corpus_term_dist = docs_to_term_dist(corpus_f,
-                                         vocab_file=args.vocab_file,
-                                         lowercase=args.lowercase,
-                                         chunk_size=args.tkn_chunk_size,
-                                         level='corpus')
-    corpus_f.close()
+    if term_dist_cache.exists():
+        corpus_term_dist = np.load(term_dist_cache)
+    else:
+        corpus_f = get_file_obj(args.corpus)
+        corpus_term_dist = docs_to_term_dist(corpus_f,
+                                            vocab_file=args.vocab_file,
+                                            lowercase=args.lowercase,
+                                            chunk_size=args.tkn_chunk_size,
+                                            level='corpus')
+        corpus_f.close()
+
+        # Cache corpus
+        np.save(term_dist_cache, corpus_term_dist)
 
     # Tokenize the corpus
     corpus_f = get_file_obj(args.corpus)
@@ -450,7 +464,7 @@ def select_random(args: argparse.Namespace) -> np.ndarray:
 def select_similar(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least similar to a fine-tuning corpus."""
     cache_path = (
-        args.dst / 'cache' / f'similar_{args.corpus.stem}_{args.sim_func}_'
+        args.cache_folder / f'similar_{args.corpus.stem}_{args.sim_func}_'
                              f'{args.fine_tune_text.stem}.pkl'
     )
     if not args.ignore_cache and cache_path.exists():
@@ -467,7 +481,7 @@ def select_similar(args: argparse.Namespace) -> np.ndarray:
 def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
     cache_path = (
-        args.dst / 'cache' / f'diverse_{args.corpus.stem}_{args.div_func}.pkl'
+        args.cache_folder / f'diverse_{args.corpus.stem}_{args.div_func}.pkl'
     )
 
     if not args.ignore_cache and cache_path.exists():
@@ -484,12 +498,11 @@ def select_diverse(args: argparse.Namespace) -> np.ndarray:
 def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least (similar + diverse)."""
     # Parse cache file paths
-    cache_dir = args.dst / 'cache'
     sim_cache = (
-        cache_dir / f'similar_{args.corpus.stem}_{args.sim_func}_'
+        args.cache_folder / f'similar_{args.corpus.stem}_{args.sim_func}_'
                     f'{args.fine_tune_text.stem}.pkl'
     )
-    div_cache = cache_dir / f'diverse_{args.corpus.stem}.pkl'
+    div_cache = args.cache_folder / f'diverse_{args.corpus.stem}.pkl'
 
     if not args.ignore_cache and sim_cache.exists():
         logger.info(f'Using similarity scores cache found at {sim_cache}')
