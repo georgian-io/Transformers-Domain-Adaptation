@@ -355,7 +355,7 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
 
     # Invert metrics so that high values correlates to high similarity
     if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
-        similarities = - similarities
+        similarities = -similarities
 
     return similarities
 
@@ -387,6 +387,10 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
         for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
     )
     corpus_f.close()
+
+    # Invert metrics so that high values correlates to high diversity
+    if args.div_func == 'type_token_ratio':
+        diversity_scores = -diversity_scores
 
     return diversity_scores
 
