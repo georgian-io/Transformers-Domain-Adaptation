@@ -24,9 +24,6 @@ def renyi_divergence(repr1, repr2, alpha=0.99):
     """Calculates Renyi divergence (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#R.C3.A9nyi_divergence)."""
     log_sum = (np.power(repr1, alpha) / np.power(repr2, alpha - 1)).sum(axis=-1)
     sim = 1 / (alpha - 1) * np.log(log_sum)
-
-    # the similarity is -inf if no term in the document is in the vocabulary
-    sim = np.where(np.isinf(sim), 0, sim)
     return sim
 
 
