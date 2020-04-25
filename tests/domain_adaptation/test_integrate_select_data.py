@@ -4,6 +4,7 @@ import itertools as it
 from pathlib import Path
 
 import pytest
+import numpy as np
 import pandas as pd
 
 from scripts.domain_adaptation import select_data
@@ -94,7 +95,7 @@ def test_select_similar_cache_correctness(tmp_path, corpus_file, vocab_file,
     args = select_data.parse_args(args)
     select_data.main(args)
 
-    cache_path = next((tmp_path / 'cache').rglob('*.pkl'))
+    cache_path = next(args.cache_folder.rglob('*.pkl'))
     assert isinstance(cache_path, Path)
 
     cache = pd.read_pickle(cache_path)
@@ -151,21 +152,37 @@ def test_select_diverse_correct_subset(tmp_path, corpus_file,
         assert tuple(docs_subset) == (CORPUS[0], CORPUS[1], CORPUS[2])
 
 
-def test_select_diverse_cache_correctness(tmp_path, corpus_file, vocab_file,
-                                          fine_tune_corpus_file):
-    """Test that the calculated similarities are cached properly."""
+def test_select_diverse_cache_correctness(tmp_path, corpus_file, vocab_file):
+    """Test that the calculated diversities are cached properly."""
     args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
                        f'diverse -v {vocab_file} -p 0.5')
     args = select_data.parse_args(args)
     select_data.main(args)
 
-    cache_path = next((tmp_path / 'cache').rglob('*.pkl'))
+    cache_path = next(args.cache_folder.rglob('*.pkl'))
     assert isinstance(cache_path, Path)
 
     cache = pd.read_pickle(cache_path)
     diversity_scores = select_data.calculate_diversity(args)
     assert isinstance(cache, pd.Series)
     assert (cache.values == diversity_scores.values).all()
+
+
+def test_select_diverse_term_dist_cache_correctness(tmp_path, corpus_file,
+                                                    vocab_file):
+    """Test that the calculated term dists are cached properly."""
+    args = shlex.split(f'--corpus {corpus_file} --dst {tmp_path} '
+                       f'diverse -v {vocab_file} -p 0.5')
+    args = select_data.parse_args(args)
+    select_data.main(args)
+
+    # Check correctness of cached term distribution
+    term_dist_cache = next(args.cache_folder.glob('*.npy'))
+    assert isinstance(term_dist_cache, Path)
+    term_dist = np.load(term_dist_cache)
+    assert isinstance(term_dist, np.ndarray)
+    assert term_dist.shape == (len(VOCABULARY),)
+    assert np.allclose(term_dist.sum(), 1)
 
 
 @pytest.mark.parametrize('invert,fuse_by', it.product(('', '-i'), ('linear_combination', 'union')))
@@ -236,7 +253,7 @@ def test_select_similar_diverse_cache_correctness(tmp_path, corpus_file,
     select_data.main(args)
 
     for metric in ('similar', 'diverse'):
-        cache_path = next((tmp_path / 'cache').rglob(f'*{metric}*.pkl'))
+        cache_path = next(args.cache_folder.rglob(f'*{metric}*.pkl'))
         assert isinstance(cache_path, Path)
 
         cache = pd.read_pickle(cache_path)
