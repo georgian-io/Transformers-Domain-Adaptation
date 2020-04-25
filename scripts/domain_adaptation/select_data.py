@@ -353,6 +353,10 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     )
     corpus_f.close()
 
+    # Invert metrics so that high values correlates to high similarity
+    if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
+        similarities = - similarities
+
     return similarities
 
 
