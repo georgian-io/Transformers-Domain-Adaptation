@@ -11,11 +11,13 @@ from functools import partial
 from types import SimpleNamespace
 from typing import List, Iterable, Union, Optional
 
+import torch
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from tokenizers import BertWordPieceTokenizer
+from transformers import BertModel
 from sklearn.preprocessing import RobustScaler
+from tokenizers import BertWordPieceTokenizer, Encoding
 
 from src.utils.iter import batch
 sys.path.append('learn-to-select-data')
@@ -71,6 +73,13 @@ def parse_args(raw_args: Optional[List[str]] = None):
                                action='store_false', dest='lowercase',
                                help='If provided, will not perform lowercasing '
                                     'during tokenization')
+    metric_parser.add_argument('--use-bert-embedder', action='store_true',
+                               help='If provided, get document embeddings using'
+                                    ' BERT as a feature extractor, instead of '
+                                    'using term distributions . For correctness,'
+                                    ' this flag can only be used with '
+                                    'vector-based similarity funcs '
+                                    '\{cosine, euclidean, variational\}')
     metric_parser.add_argument('-v', '--vocab-file', type=Path,
                                default='bert-base-uncased-vocab.txt',
                                help='Vocabulary for tokenization')
@@ -151,6 +160,13 @@ def parse_args(raw_args: Optional[List[str]] = None):
     # Create cache folder
     args.cache_folder = args.dst / 'cache'
     args.cache_folder.mkdir(exist_ok=True, parents=True)
+
+    # Ensure that vector-based sim. func. is used with BERT embedder
+    if (args.mode != 'random'
+        and args.use_bert_embedder
+        and args.sim_func not in ('cosine', 'euclidean', 'variational')):
+        raise ValueError('BERT embedder only works with the following sim. funcs'
+                         ' {\'cosine\', \'euclidean\', \'variational\'}')
 
     return args
 
@@ -244,30 +260,44 @@ def docs_to_tokens(docs: Iterable[str],
                    vocab_file: Path,
                    lowercase: bool = True,
                    chunk_size: int = 2**13,
-                  ) -> Iterable[List[str]]:
+                   return_tokens: bool = True,
+                  ) -> Iterable[Union[List[str],
+                                      List[int]]]:
     """Tokenize documents.
 
     Arguments:
         docs {Iterable[str]} -- Documents
         vocab_file {Path} -- Path to vocabulary file
-        lowercase {bool} -- If True, performs lowercasing
-        chunk_size {int} -- Tokenization batch size
+
+    Keyword Arguments:
+        lowercase {bool} -- If True, performs lowercasing (default: {'True'})
+        chunk_size {int} -- Tokenization batch size (default: {2**13})
+        return_tokens {bool} -- If True, return tokens otherwise token ids.
 
     Returns:
-        Iterable[List[str]] -- A tokenized corpus
+        Iterable[Union[List[str], List[int]]] -- A tokenized corpus
     """
     special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+    special_token_ids = (0, 100, 101, 102, 103)
     tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=lowercase)
 
     # Tokenize each document
-    tokenized: Iterable[List[str]] = (
-        enc.tokens[1:-1]
+    encodings: Iterable[Encoding] = (
+        enc
         for b in batch(docs, chunk_size)
         for enc in tokenizer.encode_batch(list(b))
     )
 
-    # Filter out possible unknown tokens
-    tokenized = ([x for x in tokens if x not in special_tokens] for tokens in tokenized)
+    # 1. Get tokens or token ids from encoding
+    # 2. Remove the special token separators
+    # 3. Remove special tokens (ids)
+    if return_tokens:
+        tokenized: Iterable[List[str]] = (enc.tokens[1:-1] for enc in encodings)
+        tokenized = ([x for x in tokens if x not in special_tokens] for tokens in tokenized)
+    else:
+        tokenized: Iterable[List[int]] = (enc.ids[1:-1] for enc in encodings)
+        tokenized = ([x for x in tokens if x not in special_token_ids] for tokens in tokenized)
+
     return tokenized
 
 
@@ -285,10 +315,10 @@ def docs_to_term_dist(docs: Iterable[str],
     Arguments:
         docs {Iterable[str]} -- Documents
         vocab_file {Path} -- Path to vocabulary file
-        lowercase {bool} -- If True, perform lowercasing
-        chunk_size {int} -- Tokenization batch size
 
     Keyword Arguments:
+        lowercase {bool} -- If True, performs lowercasing (default: {'True'})
+        chunk_size {int} -- Tokenization batch size (default: {2**13})
         level {str} -- Level at which to form term distribution.
                        Valid values are {"corpus", "doc"}. If "corpus", create
                        a corpus-level term distribution. If "doc", create
@@ -324,25 +354,64 @@ def docs_to_term_dist(docs: Iterable[str],
     return term_dist
 
 
+def docs_to_bert_embeddings(docs: Iterable[str],
+                            vocab_file: Path,
+                            lowercase: bool = True,
+                            chunk_size: int = 2**13
+                           ) -> Iterable[np.ndarray]:
+    model = BertModel.from_pretrained('bert-base-uncased')
+    if torch.cuda.is_available():
+        model.cuda()
+
+    tokenized = docs_to_tokens(docs=docs,
+                               vocab_file=vocab_file,
+                               lowercase=lowercase,
+                               chunk_size=chunk_size,
+                               return_tokens=False)
+
+    # [EXP] Limit tokens to max length of BERT tokens (512)
+    # And include [CLS] and [SEP] token ids to front and end of tokens
+    tokenized_capped: Iterable[torch.tensor] = (
+        torch.tensor([101] + tokens[:510] + [102])
+        for tokens in tokenized
+    )
+
+    # Get embeddings from BERT
+    with torch.no_grad():
+        embeddings = (
+            model(doc.view(1, -1))[0][0, 0, :].flatten().numpy()
+            for doc in tokenized_capped
+        )
+        yield from embeddings
+
+
 def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     """Compute similarities of documents on a fine-tune corpus."""
     # Create a partial-ed function for conciseness
-    to_term_dist = partial(docs_to_term_dist,
-                           vocab_file=args.vocab_file,
-                           lowercase=args.lowercase,
-                           chunk_size=args.tkn_chunk_size)
+    featurize = partial((docs_to_bert_embeddings
+                         if args.use_bert_embedder
+                         else docs_to_term_dist),
+                        vocab_file=args.vocab_file,
+                        lowercase=args.lowercase,
+                        chunk_size=args.tkn_chunk_size)
 
     # Get term distribution for fine-tune dataset
     # Chain all FT docs into one huge doc to obtain a
     # proper normalized term distribution
     f = get_file_obj(args.fine_tune_text)
-    ft_text = [' '.join(line.strip() for line in f)]
-    ft_term_dist = to_term_dist(ft_text, level="corpus").reshape(1, -1)
+    # ft_text = [' '.join(line.strip() for line in f)]
+    if args.use_bert_embedder:
+        ft_term_dist = np.sum(featurize(f), axis=0, keepdims=True)
+    else:
+        ft_term_dist = featurize(f, level="corpus").reshape(1, -1)
     f.close()
 
     # Get term distribution for each doc in the corpus
     corpus_f = get_file_obj(args.corpus)
-    corpus_term_dists = to_term_dist(corpus_f, level="doc")
+    if args.use_bert_embedder:
+        corpus_term_dist = featurize(corpus_f)
+    else:
+        corpus_term_dists = featurize(corpus_f, level="doc")
     corpus_term_dists = tqdm(corpus_term_dists,
                              desc=f'Computing {args.sim_func} similarities')
 
