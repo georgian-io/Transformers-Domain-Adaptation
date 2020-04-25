@@ -372,6 +372,7 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
     )
     # Get a document-level term distribution
     if term_dist_cache.exists():
+        logger.info(f'Using cached corpus term distribution at {term_dist_cache}')
         corpus_term_dist = np.load(term_dist_cache)
     else:
         corpus_f = get_file_obj(args.corpus)
@@ -384,6 +385,7 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
 
         # Cache corpus
         np.save(term_dist_cache, corpus_term_dist)
+        logger.info(f'Cached corpus term distribution at {term_dist_cache}')
 
     # Tokenize the corpus
     corpus_f = get_file_obj(args.corpus)
