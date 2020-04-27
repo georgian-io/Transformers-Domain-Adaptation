@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from tokenizers import BertWordPieceTokenizer
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import RobustScaler
 
 from src.utils.iter import batch
 sys.path.append('learn-to-select-data')
@@ -529,10 +529,10 @@ def select_similar_and_diverse(args: argparse.Namespace) -> np.ndarray:
     if args.fuse_by == 'linear_combination':
         # Ensure metrics are on the same scale before combining them
         similarities = (
-            MinMaxScaler().fit_transform(similarities.values.reshape(-1, 1))
+            RobustScaler().fit_transform(similarities.values.reshape(-1, 1))
         )
         diversity_scores = (
-            MinMaxScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
+            RobustScaler().fit_transform(diversity_scores.values.reshape(-1, 1))
         )
 
         # Calculate composite metric using linear combination
