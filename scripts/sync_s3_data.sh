@@ -19,14 +19,14 @@ fi
 # Copy cached folders
 if ! [ -e results ]; then mkdir results; fi
 
-FINE_TUNE_DATASET="linnaeus"
+FINE_TUNE_DATASET="BC2GM"
 PCT=2
-MOD="similar"
-EXP_NAME="pubmed_${PCT}pct_${MOD}_js_pubmed_vocab"
+MOD="sim_div"
+EXP_NAME="pubmed_${PCT}pct_${MOD}_pubmed_vocab_all"
 
 DATA_DIR="data/biology/corpus/subsets/"
-RESULTS_DIR="results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained"
-CORPUS="pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_2pct_pubmed_vocab.txt"
+RESULTS_DIR="results/data_select/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained"
+CORPUS="pubmed_corpus_most_sim_div_all_BC2GM_train_2pct_linear_combo_stdscl.txt"
 mkdir -p $DATA_DIR
 mkdir -p $RESULTS_DIR
 
@@ -58,23 +58,23 @@ function get_latest_checkpoint() {
     echo $latest_checkpoint
 }
 
-aws s3 cp "$BUCKET/domains/biology/corpus/subsets/$CORPUS" \
-    "data/biology/corpus/subsets/$CORPUS"
+aws s3 cp "$BUCKET/domains/biology/corpus/subsets/$FINE_TUNE_DATASET/pubmed_vocab/$CORPUS" \
+    "data/biology/corpus/subsets/$FINE_TUNE_DATASET/pubmed_vocab/$CORPUS"
 
 if [ $MODE = "dpt" ]; then
-    aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME" \
-        "results/$FINE_TUNE_DATASET/$EXP_NAME" \
+    aws s3 cp "$BUCKET/runs/data_select/$FINE_TUNE_DATASET/$EXP_NAME" \
+        "results/data_select/$FINE_TUNE_DATASET/$EXP_NAME" \
         --recursive --exclude="*.pt"
 
     # Copy state dicts for latest checkpoint, if available
     latest_checkpoint="$(get_latest_checkpoint $BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/)"
     if ! [ -z $latest_checkpoint ]; then
-        aws s3 sync "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint" \
-            "results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint"
+        aws s3 sync "$BUCKET/runs/data_select/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint" \
+            "results/data_select/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained/checkpoint-$latest_checkpoint"
     fi
 else
-    aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME" \
-        "results/$FINE_TUNE_DATASET/$EXP_NAME" \
+    aws s3 cp "$BUCKET/runs/data_select/$FINE_TUNE_DATASET/$EXP_NAME" \
+        "results/data_select/$FINE_TUNE_DATASET/$EXP_NAME" \
         --recursive --exclude="*checkpoint-*"
 fi
 
