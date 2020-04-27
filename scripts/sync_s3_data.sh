@@ -21,12 +21,12 @@ if ! [ -e results ]; then mkdir results; fi
 
 FINE_TUNE_DATASET="linnaeus"
 PCT=2
-MOD="similar"
-EXP_NAME="pubmed_${PCT}pct_${MOD}_js_pubmed_vocab"
+MOD="diverse"
+EXP_NAME="pubmed_${PCT}pct_least_${MOD}_pubmed_vocab_all"
 
 DATA_DIR="data/biology/corpus/subsets/"
 RESULTS_DIR="results/$FINE_TUNE_DATASET/$EXP_NAME/domain-pre-trained"
-CORPUS="pubmed_corpus_${MOD}_jensen-shannon_linnaeus_train_2pct_pubmed_vocab.txt"
+CORPUS="pubmed_corpus_least_diverse_all_linnaeus_train_linear_combo_stdscl.txt"
 mkdir -p $DATA_DIR
 mkdir -p $RESULTS_DIR
 
@@ -58,8 +58,8 @@ function get_latest_checkpoint() {
     echo $latest_checkpoint
 }
 
-aws s3 cp "$BUCKET/domains/biology/corpus/subsets/$CORPUS" \
-    "data/biology/corpus/subsets/$CORPUS"
+aws s3 cp "$BUCKET/domains/biology/corpus/subsets/pubmed_vocab/$CORPUS" \
+    "data/biology/corpus/subsets/pubmed_vocab/$CORPUS"
 
 if [ $MODE = "dpt" ]; then
     aws s3 cp "$BUCKET/runs/$FINE_TUNE_DATASET/$EXP_NAME" \
