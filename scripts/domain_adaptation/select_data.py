@@ -389,10 +389,14 @@ def docs_to_term_dist(docs: Iterable[str],
 
 def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     """Compute similarities of documents on a fine-tune corpus."""
-    if args.use_tfidf:
-        return _calculate_similarity_tfidf(args)
-    else:
-        return _calculate_similarity_count(args)
+    similarities = (_calculate_similarity_tfidf(args) if args.use_tfidf else
+                    _calculate_similarity_count(args))
+
+    # Invert metrics so that high values correlates to high similarity
+    if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
+        similarities = -similarities
+
+    return similarities
 
 
 def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
@@ -451,10 +455,6 @@ def _calculate_similarity_count(args: argparse.Namespace) -> pd.Series:
         )
     )
     corpus_f.close()
-
-    # Invert metrics so that high values correlates to high similarity
-    if args.sim_func in ('euclidean', 'variational', 'bhattacharyya', 'renyi'):
-        similarities = -similarities
 
     return similarities
 
