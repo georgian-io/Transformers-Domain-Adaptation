@@ -161,17 +161,6 @@ def test_docs_to_tfidf_invalid_level(documents, vocab_file):
         select_data.docs_to_tfidf(documents, vocab_file, level='invalid-level-123')
 
 
-def test_docs_to_tfidf_level_corpus_type(documents, vocab_file):
-    """Test the output types of `docs_to_tfidf`'s output when level='corpus'."""
-    term_dist, vectorizer = select_data.docs_to_tfidf(documents, vocab_file,
-                                                      level='corpus')
-    assert isinstance(term_dist, np.ndarray)
-    assert term_dist.shape == (len(VOCABULARY) - 1,)  # Without '[UNK]'
-
-    assert isinstance(vectorizer, TfidfVectorizer)
-    assert hasattr(vectorizer, 'vocabulary_')
-    assert hasattr(vectorizer, 'idf_')
-
 
 # def test_docs_to_tfidf_level_corpus_correctness(documents, vocab_file):
 #     """Test the output correctness of `docs_to_tfidf` when level=corpus."""
