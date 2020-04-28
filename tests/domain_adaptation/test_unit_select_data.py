@@ -152,3 +152,13 @@ def test_docs_to_term_dist_level_doc_correctness(documents, vocab_file):
     ])
     answers = answers / answers.sum(axis=1, keepdims=True)
     assert np.allclose(term_dists, answers)
+
+
+def test_docs_to_bert_embeddings_type(documents, vocab_file):
+    embeddings = select_data.docs_to_bert_embeddings(documents, vocab_file)
+    assert isinstance(embeddings, Iterable)
+
+    embedding = next(embeddings)
+    assert isinstance(embedding, np.ndarray)
+    assert embedding.shape == (768,)
+    assert embedding.dtype == np.dtype(np.float32)
