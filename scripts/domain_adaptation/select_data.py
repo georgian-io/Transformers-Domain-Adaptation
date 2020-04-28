@@ -283,6 +283,7 @@ def docs_to_tfidf(docs: Iterable[str],
                   tokenizer_vocab_file: Path,
                   level: str = 'corpus',
                   tfidf_vect: Optional[TfidfVectorizer] = None,
+                  chunk_size: int = 2**13,
                  ) -> Tuple[np.ndarray, TfidfVectorizer]:
     """Convert documents into TF-IDF vectors.
 
@@ -299,32 +300,35 @@ def docs_to_tfidf(docs: Iterable[str],
             -- A fitted TfidfVectorizer. If provided, transforms data with it.
                Otherwise, fit a new TfidfVectorizer and transform `docs`
                (default: {None})
+        chunk_size {int} -- Tokenization batch size (default: {2**13})
 
     Returns:
         Tuple[np.ndarray, TfidfVectorizer] -- TFIDF vector(s)
     """
-    def tokenize_and_clean(text: str, tokenizer: BertWordPieceTokenizer) -> List[str]:
-        """Tokenize and remove special BERT tokens."""
-        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
-        tokenized = tokenizer.encode(text).tokens[1:-1]
-        return [token for token in tokenized if token not in special_tokens]
+    special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+    tokenizer = BertWordPieceTokenizer(str(tokenizer_vocab_file), lowercase=True)
+
+    tokenized = (
+        [token for token in enc.tokens[1:-1] if token not in special_tokens]
+        for b in batch(docs, chunk_size)
+        for enc in tokenizer.encode_batch(list(b))
+    )
 
     if tfidf_vect is None:
-        tokenizer = BertWordPieceTokenizer(str(tokenizer_vocab_file),
-                                           lowercase=True)
-        tfidf_vect = TfidfVectorizer(lowercase=False,
-                                     norm='l1',  # To mimic a valid prob. dist.
-                                     tokenizer=lambda x: tokenize_and_clean(x, tokenizer))
+        if level != 'doc':
+            raise ValueError('TF-IDF vectorizer only can be fitted with '
+                             'level="doc"')
 
-        # Create a duplicate iterator, otherwise `docs` would have been exhausted
-        docs, docs_ = it.tee(docs)
-
-        tfidf_vect.fit(docs_)
+        tfidf_vect = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                     norm='l1',  # To mimic a valid prob. dist
+                                     tokenizer=lambda x: x)
+        ret = tfidf_vect.fit_transform(tokenized)
+        return ret.toarray().squeeze(), tfidf_vect
 
     if level == 'corpus':
-        ret = tfidf_vect.transform([' '.join(docs)])
+        ret = tfidf_vect.transform([it.chain.from_iterable(tokenized)])
     elif level == 'doc':
-        ret = tfidf_vect.transform(docs)
+        ret = tfidf_vect.transform(tokenized)
     else:
         raise ValueError(f'Invalid level {level} specified.')
     return ret.toarray().squeeze(), tfidf_vect
