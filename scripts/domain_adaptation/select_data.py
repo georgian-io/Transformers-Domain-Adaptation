@@ -401,17 +401,44 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
 
 def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
     """Compute doc. similarities on a fine-tune corpus using TF-IDF."""
-    # Get tfidf vectors for each doc in the corpus
+
+    def tokenize(docs: Iterable[str],
+                 vocab_file: Path,
+                 chunk_size: int = 2**13
+                ) -> Iterable[List[str]]:
+        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+        tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=True)
+        tokenized = (
+            [token for token in enc.tokens[1:-1] if token not in special_tokens]
+            for b in batch(docs, chunk_size)
+            for enc in tokenizer.encode_batch(list(b))
+        )
+        return tokenized
+
+    logger.info('Fitting the TF-IDF Vectorizer on the corpus')
     corpus_f = get_file_obj(args.corpus)
-    corpus_tfidf, vectorizer = docs_to_tfidf(corpus_f, args.vocab_file,
-                                             level='doc')
-    corpus_f.close()
+    tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+    vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                 norm='l1',  # To mimic a valid prob. dist
+                                 tokenizer=lambda x: x)
+    vectorizer.fit(tokenized)
 
     # Get tfidf vector for fine-tune dataset
+    logger.info('Converting fine-tune dataset to a TFIDF term distribution')
     f = get_file_obj(args.fine_tune_text)
-    ft_tfidf, _ = docs_to_tfidf(f, args.vocab_file, level='corpus',
-                                tfidf_vect=vectorizer)
+    tokenized_ft: List[List[str]] = (
+        [it.chain.from_iterable(tokenize(f, vocab_file=args.vocab_file))]
+    )
+    ft_tfidf = vectorizer.transform([tokenized_ft]).toarray().squeeze()
     f.close()
+
+    # Get tfidf vectors for each doc in the corpus
+    logger.info('Converting corpus to a TFIDF term distribution')
+    corpus_f = get_file_obj(args.corpus)
+    tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+    corpus_tfidf = (vectorizer.transform([doc]).toarray().squeeze()
+                    for doc in tokenized)
+    corpus_f.close()
 
     # Calculate similarities for each doc
     similarities = pd.Series(
