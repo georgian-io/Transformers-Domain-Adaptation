@@ -445,7 +445,7 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     # Get term distribution for each doc in the corpus
     corpus_f = get_file_obj(args.corpus)
     if args.use_bert_embedder:
-        corpus_term_dist = featurize(corpus_f)
+        corpus_term_dists = featurize(corpus_f)
     else:
         corpus_term_dists = featurize(corpus_f, level="doc")
     corpus_term_dists = tqdm(corpus_term_dists,
