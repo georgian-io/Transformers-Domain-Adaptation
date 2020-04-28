@@ -13,6 +13,7 @@ from typing import List, Tuple, Iterable, Union, Optional
 
 import numpy as np
 import pandas as pd
+import dill as pickle
 from tqdm import tqdm
 from tokenizers import BertWordPieceTokenizer
 from sklearn.preprocessing import RobustScaler
@@ -360,13 +361,25 @@ def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
         )
         return tokenized
 
-    logger.info('Fitting the TF-IDF Vectorizer on the corpus')
-    corpus_f = get_file_obj(args.corpus)
-    tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
-    vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
-                                 norm='l1',  # To mimic a valid prob. dist
-                                 tokenizer=lambda x: x)
-    vectorizer.fit(tokenized)
+
+    cached_tfidf = args.cache_folder / 'tfidf.pkl'
+
+    if cached_tfidf.exists():
+        logger.info(f'Loading TF-IDF vectorizer at {cached_tfidf}')
+        with open(cached_tfidf, 'rb') as f:
+            vectorizer = pickle.load(f)
+    else:
+        logger.info('Fitting the TF-IDF vectorizer on the corpus')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+        vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                    norm='l1',  # To mimic a valid prob. dist
+                                    tokenizer=lambda x: x)
+        vectorizer.fit(tokenized)
+
+        with open(cached_tfidf, 'wb') as f:
+            pickle.dump(vectorizer, f)
+        logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
 
     # Get tfidf vector for fine-tune dataset
     logger.info('Converting fine-tune dataset to a TFIDF term distribution')
