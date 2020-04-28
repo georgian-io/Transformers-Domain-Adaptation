@@ -279,61 +279,6 @@ def docs_to_tokens(docs: Iterable[str],
     return tokenized
 
 
-def docs_to_tfidf(docs: Iterable[str],
-                  tokenizer_vocab_file: Path,
-                  level: str = 'corpus',
-                  tfidf_vect: Optional[TfidfVectorizer] = None,
-                  chunk_size: int = 2**13,
-                 ) -> Tuple[np.ndarray, TfidfVectorizer]:
-    """Convert documents into TF-IDF vectors.
-
-    Arguments:
-        docs {Iterable[List[str]]} -- Raw documents
-        tokenizer_vocab_file {Path} -- Vocabulary to tokenize documents
-
-    Keyword Arguments:
-        level {str} -- Level at which to form TF-IDF.
-                       Valid values are {"corpus", "doc"}. If "corpus", create
-                       a corpus-level TFIDF vector. If "doc", create
-                       document-level TFIDF vectors (default: {'corpus'})
-        tfidf_vect {Optional[List[str]]}
-            -- A fitted TfidfVectorizer. If provided, transforms data with it.
-               Otherwise, fit a new TfidfVectorizer and transform `docs`
-               (default: {None})
-        chunk_size {int} -- Tokenization batch size (default: {2**13})
-
-    Returns:
-        Tuple[np.ndarray, TfidfVectorizer] -- TFIDF vector(s)
-    """
-    special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
-    tokenizer = BertWordPieceTokenizer(str(tokenizer_vocab_file), lowercase=True)
-
-    tokenized = (
-        [token for token in enc.tokens[1:-1] if token not in special_tokens]
-        for b in batch(docs, chunk_size)
-        for enc in tokenizer.encode_batch(list(b))
-    )
-
-    if tfidf_vect is None:
-        if level != 'doc':
-            raise ValueError('TF-IDF vectorizer only can be fitted with '
-                             'level="doc"')
-
-        tfidf_vect = TfidfVectorizer(lowercase=False, token_pattern=None,
-                                     norm='l1',  # To mimic a valid prob. dist
-                                     tokenizer=lambda x: x)
-        ret = tfidf_vect.fit_transform(tokenized)
-        return ret.toarray().squeeze(), tfidf_vect
-
-    if level == 'corpus':
-        ret = tfidf_vect.transform([it.chain.from_iterable(tokenized)])
-    elif level == 'doc':
-        ret = tfidf_vect.transform(tokenized)
-    else:
-        raise ValueError(f'Invalid level {level} specified.')
-    return ret.toarray().squeeze(), tfidf_vect
-
-
 def docs_to_term_dist(docs: Iterable[str],
                       vocab_file: Path,
                       lowercase: bool = True,
