@@ -8,8 +8,9 @@ import logging
 import itertools as it
 from pathlib import Path
 from functools import partial
+from multiprocessing import cpu_count
 from types import SimpleNamespace
-from typing import List, Iterable, Union, Optional
+from typing import List, Tuple, Iterable, Union, Optional
 
 import torch
 import numpy as np
@@ -357,8 +358,38 @@ def docs_to_term_dist(docs: Iterable[str],
 def docs_to_bert_embeddings(docs: Iterable[str],
                             vocab_file: Path,
                             lowercase: bool = True,
-                            chunk_size: int = 2**13
+                            chunk_size: int = 2**13,
+                            batch_size: int = 128,
                            ) -> Iterable[np.ndarray]:
+    class DocDataset(torch.utils.data.IterableDataset):
+        MAX_LENGTH = 512
+        cls_token_id = 101
+        sep_token_id = 102
+
+        def __init__(self, tokenized_docs: Iterable[List[str]]):
+            self.tokenized_docs = tokenized_docs
+
+        def __iter__(self):
+            ret = (
+                torch.tensor(
+                    [self.cls_token_id] + doc[:(self.MAX_LENGTH - 2)] + [self.sep_token_id]
+                ) for doc in self.tokenized_docs
+            )
+
+            # Split iterable if run with multiple processes
+            worker_info = torch.utils.data.get_worker_info()
+            if worker_info is not None:
+                ret = it.islice(ret, worker_info.id, None, worker_info.num_workers)
+            return ret
+
+    def collate_fn(batch: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        pad_token_id = 0
+        X = torch.nn.utils.rnn.pad_sequence(batch,
+                                            batch_first=True,
+                                            padding_value=pad_token_id)
+        attention_masks = (X != pad_token_id)#.type(torch.bool)
+        return X, attention_masks
+
     model = BertModel.from_pretrained('bert-base-uncased')
     if torch.cuda.is_available():
         model.cuda()
@@ -368,21 +399,26 @@ def docs_to_bert_embeddings(docs: Iterable[str],
                                lowercase=lowercase,
                                chunk_size=chunk_size,
                                return_tokens=False)
-
-    # [EXP] Limit tokens to max length of BERT tokens (512)
-    # And include [CLS] and [SEP] token ids to front and end of tokens
-    tokenized_capped: Iterable[torch.tensor] = (
-        torch.tensor([101] + tokens[:510] + [102])
-        for tokens in tokenized
+    dataset = DocDataset(tokenized)
+    dataloader = (
+        torch.utils.data.DataLoader(dataset,
+                                    batch_size=batch_size,
+                                    collate_fn=collate_fn,
+                                    # num_workers=cpu_count() - 1,
+                                    shuffle=False,
+                                    pin_memory=torch.cuda.is_available())
     )
 
     # Get embeddings from BERT
     with torch.no_grad():
-        embeddings = (
-            model(doc.view(1, -1))[0][0, 0, :].flatten().numpy()
-            for doc in tokenized_capped
-        )
-        yield from embeddings
+        for input_docs, attention_masks in dataloader:
+            if torch.cuda.is_available():
+                input_docs = input_docs.cuda()
+                attention_masks = attention_masks.cuda()
+
+            yield from (
+                model(input_docs, attention_mask=attention_masks)[0][:, 0, :].cpu().numpy()
+            )
 
 
 def calculate_similarity(args: argparse.Namespace) -> pd.Series:
@@ -401,7 +437,7 @@ def calculate_similarity(args: argparse.Namespace) -> pd.Series:
     f = get_file_obj(args.fine_tune_text)
     # ft_text = [' '.join(line.strip() for line in f)]
     if args.use_bert_embedder:
-        ft_term_dist = np.sum(featurize(f), axis=0, keepdims=True)
+        ft_term_dist = np.sum((x for x in featurize(f)), axis=0, keepdims=True)
     else:
         ft_term_dist = featurize(f, level="corpus").reshape(1, -1)
     f.close()

@@ -155,7 +155,7 @@ def test_docs_to_term_dist_level_doc_correctness(documents, vocab_file):
 
 
 def test_docs_to_bert_embeddings_type(documents, vocab_file):
-    embeddings = select_data.docs_to_bert_embeddings(documents, vocab_file)
+    embeddings = select_data.docs_to_bert_embeddings(documents, vocab_file, batch_size=1)
     assert isinstance(embeddings, Iterable)
 
     embedding = next(embeddings)
