@@ -382,28 +382,32 @@ def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
         logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
 
     # Get tfidf vector for fine-tune dataset
-    logger.info('Converting fine-tune dataset to a TFIDF term distribution')
     f = get_file_obj(args.fine_tune_text)
-    tokenized_ft: List[List[str]] = (
-        [it.chain.from_iterable(tokenize(f, vocab_file=args.vocab_file))]
+    tokenized_ft: Iterable[List[str]] = (
+        it.chain.from_iterable(tokenize(f, vocab_file=args.vocab_file))
     )
-    ft_tfidf = vectorizer.transform([tokenized_ft]).toarray().squeeze()
+    ft_tfidf = vectorizer.transform([tokenized_ft]).toarray()
     f.close()
 
     # Get tfidf vectors for each doc in the corpus
     logger.info('Converting corpus to a TFIDF term distribution')
     corpus_f = get_file_obj(args.corpus)
+
     tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
-    corpus_tfidf = (vectorizer.transform([doc]).toarray().squeeze()
-                    for doc in tokenized)
-    corpus_f.close()
+    tokenized = tqdm(tokenized, desc=f'Computing {args.sim_func} similarities')
+
+    corpus_tfidfs = (vectorizer.transform(docs).toarray()
+                     for docs in batch(tokenized, args.comp_chunk_size))
 
     # Calculate similarities for each doc
     similarities = pd.Series(
-        similarity.similarity_name2value(args.sim_func, ft_tfidf, doc_tfidf)
-        for doc_tfidf in tqdm(corpus_tfidf,
-                              desc=f'Computing {args.sim_func} similarities')
+        it.chain.from_iterable(
+            similarity.similarity_name2value_fast(args.sim_func,
+                                                  ft_tfidf, doc_tfidfs)
+            for doc_tfidfs in corpus_tfidfs
+        )
     )
+    corpus_f.close()
 
     return similarities
 
