@@ -502,7 +502,7 @@ def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
         tokenized_corpus: Iterable[List[str]] = (
             it.chain.from_iterable(tokenize(corpus_f, vocab_file=args.vocab_file))
         )
-        corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray()
+        corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray().squeeze()
         corpus_f.close()
 
         np.save(corpus_tfidf_cache, corpus_tfidf)
@@ -516,11 +516,11 @@ def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
                             chunk_size=args.tkn_chunk_size)
 
     # Calculate diversity for each doc in the corpus
-    word2id = create_vocab(args.vocab_file).word2id
     diversity_scores = pd.Series(
         diversity.diversity_feature_name2value(args.div_func, example=doc,
                                                train_term_dist=corpus_tfidf,
-                                               word2id=word2id, word2vec='')
+                                               word2id=vectorizer.vocabulary_,
+                                               word2vec='')
         for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
     )
     corpus_f.close()
