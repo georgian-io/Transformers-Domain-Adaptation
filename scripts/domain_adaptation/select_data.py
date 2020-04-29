@@ -76,6 +76,9 @@ def parse_args(raw_args: Optional[List[str]] = None):
     metric_parser.add_argument('-v', '--vocab-file', type=Path,
                                default='bert-base-uncased-vocab.txt',
                                help='Vocabulary for tokenization')
+    metric_parser.add_argument('--use-tfidf', action='store_true',
+                               help='If True, compare similarities based on '
+                                    'TF-IDF instead of count distribution')
     metric_parser.add_argument('--tkn-chunk-size', type=int, default=2**13,
                                help='Tokenization chunk size')
     metric_parser.add_argument('--comp-chunk-size', type=int, default=128,
@@ -93,9 +96,6 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--sim-func', choices=SIMILARITY_FUNCTIONS,
                            default='jensen-shannon',
                            help='Similarity function to use')
-    subparser.add_argument('--use-tfidf', action='store_true',
-                           help='If True, compare similarities based on TF-IDF '
-                                'instead of count distribution')
 
     # Args for "diverse" mode
     subparser = subparsers.add_parser(
@@ -121,9 +121,6 @@ def parse_args(raw_args: Optional[List[str]] = None):
     subparser.add_argument('--div-func', choices=DIVERSITY_FUNCTIONS,
                            default='entropy',
                            help='Diversity function to use')
-    subparser.add_argument('--use-tfidf', action='store_true',
-                           help='If True, compare similarities based on TF-IDF '
-                                'instead of count distribution')
     subparser.add_argument('--fuse-by', choices=('linear_combination', 'union'),
                            default='linear_combination',
                            help='Method by which to combine similarity and '
@@ -376,6 +373,7 @@ def _calculate_similarity_tfidf(args: argparse.Namespace) -> pd.Series:
                                     norm='l1',  # To mimic a valid prob. dist
                                     tokenizer=lambda x: x)
         vectorizer.fit(tokenized)
+        corpus_f.close()
 
         with open(cached_tfidf, 'wb') as f:
             pickle.dump(vectorizer, f)
@@ -449,6 +447,80 @@ def _calculate_similarity_count(args: argparse.Namespace) -> pd.Series:
 
 
 def calculate_diversity(args: argparse.Namespace) -> pd.Series:
+    diversity_scores = (_calculate_diversity_tfidf(args) if args.use_tfidf else
+                        _calculate_diversity_count(args))
+
+    # Invert metrics so that high values correlates to high diversity
+    if args.div_func == 'type_token_ratio':
+        diversity_scores = -diversity_scores
+
+    return diversity_scores
+
+
+def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
+    def tokenize(docs: Iterable[str],
+                 vocab_file: Path,
+                 chunk_size: int = 2**13
+                ) -> Iterable[List[str]]:
+        special_tokens = ('[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]')
+        tokenizer = BertWordPieceTokenizer(str(vocab_file), lowercase=True)
+        tokenized = (
+            [token for token in enc.tokens[1:-1] if token not in special_tokens]
+            for b in batch(docs, chunk_size)
+            for enc in tokenizer.encode_batch(list(b))
+        )
+        return tokenized
+
+
+    cached_tfidf = args.cache_folder / 'tfidf.pkl'
+
+    if cached_tfidf.exists():
+        logger.info(f'Loading TF-IDF vectorizer at {cached_tfidf}')
+        with open(cached_tfidf, 'rb') as f:
+            vectorizer = pickle.load(f)
+    else:
+        logger.info('Fitting the TF-IDF vectorizer on the corpus')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized = tokenize(corpus_f, vocab_file=args.vocab_file)
+        vectorizer = TfidfVectorizer(lowercase=False, token_pattern=None,
+                                    norm='l1',  # To mimic a valid prob. dist
+                                    tokenizer=lambda x: x)
+        vectorizer.fit(tokenized)
+        corpus_f.close()
+
+        with open(cached_tfidf, 'wb') as f:
+            pickle.dump(vectorizer, f)
+        logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
+
+    # Get a corpus tfidf
+    corpus_f = get_file_obj(args.corpus)
+    tokenized_corpus: Iterable[List[str]] = (
+        it.chain.from_iterable(tokenize(corpus_f, vocab_file=args.vocab_file))
+    )
+    corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray()
+    corpus_f.close()
+
+    # Tokenize the corpus
+    corpus_f = get_file_obj(args.corpus)
+    corpus = docs_to_tokens(corpus_f,
+                            vocab_file=args.vocab_file,
+                            lowercase=args.lowercase,
+                            chunk_size=args.tkn_chunk_size)
+
+    # Calculate diversity for each doc in the corpus
+    word2id = create_vocab(args.vocab_file).word2id
+    diversity_scores = pd.Series(
+        diversity.diversity_feature_name2value(args.div_func, example=doc,
+                                               train_term_dist=corpus_tfidf,
+                                               word2id=word2id, word2vec='')
+        for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
+    )
+    corpus_f.close()
+
+    return diversity_scores
+
+
+def _calculate_diversity_count(args: argparse.Namespace) -> pd.Series:
     """Compute intra-document diversity."""
     term_dist_cache = (
         args.cache_folder
@@ -487,10 +559,6 @@ def calculate_diversity(args: argparse.Namespace) -> pd.Series:
         for doc in tqdm(corpus, desc=f'Computing {args.div_func}')
     )
     corpus_f.close()
-
-    # Invert metrics so that high values correlates to high diversity
-    if args.div_func == 'type_token_ratio':
-        diversity_scores = -diversity_scores
 
     return diversity_scores
 
@@ -568,7 +636,8 @@ def select_similar(args: argparse.Namespace) -> np.ndarray:
 def select_diverse(args: argparse.Namespace) -> np.ndarray:
     """Select documents that are most / least diverse."""
     cache_path = (
-        args.cache_folder / f'diverse_{args.corpus.stem}_{args.div_func}.pkl'
+        args.cache_folder / f'diverse_{"tfidf" if args.use_tfidf else "count"}_'
+                            f'{args.corpus.stem}_{args.div_func}.pkl'
     )
 
     if not args.ignore_cache and cache_path.exists():
