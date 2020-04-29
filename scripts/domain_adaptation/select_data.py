@@ -471,9 +471,8 @@ def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
         )
         return tokenized
 
-
+    # Obtain a fitted TF-IDF vectorizer
     cached_tfidf = args.cache_folder / 'tfidf.pkl'
-
     if cached_tfidf.exists():
         logger.info(f'Loading TF-IDF vectorizer at {cached_tfidf}')
         with open(cached_tfidf, 'rb') as f:
@@ -493,12 +492,21 @@ def _calculate_diversity_tfidf(args: argparse.Namespace) -> pd.Series:
         logger.info(f'TF-IDF vectorizer cached at {cached_tfidf}')
 
     # Get a corpus tfidf
-    corpus_f = get_file_obj(args.corpus)
-    tokenized_corpus: Iterable[List[str]] = (
-        it.chain.from_iterable(tokenize(corpus_f, vocab_file=args.vocab_file))
-    )
-    corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray()
-    corpus_f.close()
+    corpus_tfidf_cache = args.cache_folder / f'{args.corpus.stem}_tfidf_repr.npy'
+    if corpus_tfidf_cache.exists():
+        logger.info(f'Loading cached TF-IDF representation of corpus at {corpus_tfidf_cache}')
+        corpus_tfidf = np.load(corpus_tfidf_cache)
+    else:
+        logger.info('Transforming corpus to a TF-IDF representation')
+        corpus_f = get_file_obj(args.corpus)
+        tokenized_corpus: Iterable[List[str]] = (
+            it.chain.from_iterable(tokenize(corpus_f, vocab_file=args.vocab_file))
+        )
+        corpus_tfidf = vectorizer.transform([tokenized_corpus]).toarray()
+        corpus_f.close()
+
+        np.save(corpus_tfidf_cache, corpus_tfidf)
+        logger.info(f'TF-IDF representation of corpus cached at {corpus_tfidf_cache}')
 
     # Tokenize the corpus
     corpus_f = get_file_obj(args.corpus)
