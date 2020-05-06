@@ -102,12 +102,61 @@ def read_text_with_logging(p: str) -> Iterable[str]:
 
 
 class TextDataset(Dataset):
+    """PyTorch dataset to process text data for BERT domain pre-training.
+
+    The individual examples of this dataset are token IDs
+    (corresponding to the BERT Vocabulary) of length `block_size`,
+    with first and last tokens IDs corresponding to [CLS] and [SEP] respectively.
+
+    Example:
+        ["Hello, world", "Goodbye, world"]
+        -> [101, 7592, 1010, 2088, 9119, 1010, 2088, 102, 0, 0, ...]
+           |<--------------------`block_size`--------------------->|
+
+
+    The data pre-processing pipeline involves:
+        1. Read a stream of texts from one or more text files
+        2. Tokenizing the stream of texts
+           (using the BertWordPiece tokenizer; implemented in Rust)
+        3. Create examples by batching results from (2).
+           Each batch will be prepended/appended with [CLS]/[SEP] token IDs.
+        4. The final example is right-padded with zeros.
+        5. Stack all examples into a contiguous torch Tensor with dtype
+           torch.short (torch.int16) for memory savings
+        6. Cache results
+
+    Note:
+        BERT requires inputs to be of type torch.long. The examples of `TextDatset`
+        has to be convert to torch.long via `tensor.type(torch.long)` before
+        feeding it to the BERT model.
+
+    Attributes:
+        examples {torch.Tensor} -- A torch tensor of dtype torch.short and of
+                                   shape (N, `block_size`), where N is the number
+                                   of documents.
+    """
+
     def __init__(self,
                  tokenizer: Tokenizer,
                  args,
                  file_paths: List[str],
                  block_size: int = 512,
                  evaluate: bool = False):
+        """Init function.
+
+        Arguments:
+            tokenizer {Tokenizer} -- A BertWordPieceTokenizer from
+                                     HuggingFace's `tokenizer` library
+            args {argparse.Namespace} -- CLI args
+            file_paths {List[str]} -- List of corpora text files
+
+        Keyword Arguments:
+            block_size {int} -- Controls the length of a single example
+                                ([CLS] and [SEP] token IDs included)
+                                (default: {512})
+            evaluate {bool} -- If True, saves cache as "eval_corpus.pt"
+                               instead of "corpus.pt". (default: {False})
+        """
         block_size = block_size - 2  # Reduce by 2 to account for [CLS] and [SEP] tokens
 
         cached_features_file = (
