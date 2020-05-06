@@ -28,9 +28,9 @@ def parse_args():
     )
     parser.add_argument('--bert-vocab', type=str, required=True,
                         help='Path to original BERT vocabulary text file.')
-    parser.add_argument('--corpus', required=True,
-                        type=lambda paths: paths.split(','),
-                        help='Path to in-domain corpus text file.')
+    parser.add_argument('--corpus', required=True, type=Path,
+                        help='Path to in-domain corpus text file. '
+                             'Can be a text file, or a folder of text files.')
     parser.add_argument('--dst', type=str, required=True,
                         help='Directory to output the augmented '
                              'vocabulary text file.')
@@ -51,7 +51,18 @@ def parse_args():
                         help='Number of lines to tokenize each time. '
                              'Larger values lead to time savings at the '
                              'expense of larger memory requirements.')
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    if not args.corpus.exists():
+        raise ValueError(f'Specified corpus value of {args.corpus} '
+                          'does not exist.')
+    if args.corpus.is_dir():
+        args.corpus = [str(x) for x in args.corpus.rglob('*.txt')]
+    else:  # When it is a file
+        args.corpus = [str(args.corpus)]
+
+    return args
 
 
 def train_tokenizer(corpus: Union[str, List[str]],
