@@ -95,9 +95,10 @@ MODEL_CLASSES = {
 }
 
 
-def read_text_with_logging(p: str) -> List[str]:
+def read_text_with_logging(p: str) -> Iterable[str]:
     logger.info(f'Reading text from {p}')
-    return Path(p).read_text(encoding="utf-8").splitlines()
+    with open(p, encoding="utf-8") as f:
+        yield from f
 
 
 class TextDataset(Dataset):
@@ -124,17 +125,15 @@ class TextDataset(Dataset):
             logger.info("Reading dataset at %s", file_paths)
 
             # This part is not very memory-efficient but reduces I/O bottleneck significantly
-            text_chunks: Iterable[List[str]] = it.chain.from_iterable(
-                parallelize(read_text_with_logging, filepath_batch,
-                            leave=False, async_ok=True)
-                for filepath_batch in batch_iters(file_paths, args.chunk_size)
+            texts: Iterable[str] = it.chain.from_iterable(
+                read_text_with_logging(p) for p in file_paths
             )
 
             # Tokenize in parallel using Rust tokenizer
             tokenized: Iterable[int] = it.chain.from_iterable(
                 encodings.ids[1:-1]
-                for chunk in text_chunks
-                for encodings in tokenizer.encode_batch(chunk)
+                for text_chunk in batch_iters(texts, args.chunk_size)
+                for encodings in tokenizer.encode_batch(list(text_chunk))
             )
 
             # Rebatch tokens to be of length `block_size`
