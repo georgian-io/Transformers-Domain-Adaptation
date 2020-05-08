@@ -8,7 +8,7 @@
 # Training output files
 *.json
 *.bin
-
+*.pt
 
 # Events files generated from training
 events*
