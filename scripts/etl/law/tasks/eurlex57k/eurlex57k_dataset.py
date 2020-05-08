@@ -11,10 +11,9 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from src.tokenizer import truncate
 
 
-TEXT_COLS = ['header', 'recitals', 'attachments', 'main_body']
-
-
 class Eurlex57kDataset(Dataset):
+    TEXT_COLS = ['header', 'recitals', 'attachments', 'main_body']
+
     def __init__(self,
                  eurlex57k: pd.DataFrame,
                  mode: str,
@@ -30,8 +29,8 @@ class Eurlex57kDataset(Dataset):
 
         # Filter dataframe for appropriate data set
         df = eurlex57k[eurlex57k['dataset'] == mode]
-        if not set(TEXT_COLS) <= set(df.columns):
-            raise ValueError(f'Dataframe has to contain {TEXT_COLS} columns')
+        if not set(self.TEXT_COLS) <= set(df.columns):
+            raise ValueError(f'Dataframe has to contain {self.TEXT_COLS} columns')
         if not len(df):
             raise ValueError(f'No values after filtering Eurlex57k for {mode}')
 
@@ -39,14 +38,7 @@ class Eurlex57kDataset(Dataset):
         df['main_body_original'] = df['main_body']
         df['main_body'] = df['main_body'].apply(lambda x: '\n'.join(x))
 
-        self.texts = (
-            df[TEXT_COLS]
-            .apply(lambda row: ' '.join(x for elem in row for x in elem.split()), axis=1)
-            .apply(lambda x: unicodedata
-                             .normalize('NFKD', x)
-                             .encode('ascii', 'ignore')
-                             .decode("utf-8"))
-        )
+        self.texts = self.preprocess_texts(df[self.TEXT_COLS])
 
         self.examples = (
             [truncate(enc.ids)
@@ -67,3 +59,15 @@ class Eurlex57kDataset(Dataset):
     def __getitem__(self, item: int) -> Tuple[torch.Tensor, torch.Tensor]:
         return (torch.tensor(self.examples[item], dtype=torch.long),
                 self.labels[item])
+
+    @staticmethod
+    def preprocess_texts(df):
+        """Assumption: All columns in `df` are text columns."""
+        return (
+            df
+            .apply(lambda row: ' '.join(word for text_col in row for word in text_col.split()), axis=1)
+            .apply(lambda x: unicodedata
+                             .normalize('NFKD', x)
+                             .encode('ascii', 'ignore')
+                             .decode("utf-8"))
+        )
