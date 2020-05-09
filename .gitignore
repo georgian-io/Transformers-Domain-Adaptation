@@ -10,5 +10,8 @@
 *.bin
 *.pt
 
+# Volatile files for analysis
+analyses
+
 # Events files generated from training
 events*
