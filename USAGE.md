@@ -135,17 +135,19 @@ export OMP_NUM_THREADS=<num-cpus-per-gpu>
 ---
 
 ## 4. Fine-Tuning (FT)
-BERT has to be fine-tuned before it can be used for downstream tasks such as sentiment analysis, sentence classification, etc. Currently, only name entity recognition is supported.
+BERT has to be fine-tuned before it can be used for downstream tasks such as sentiment analysis, sentence classification, etc. Currently, only name entity recognition and multi-label text classification is supported.
 
+
+### Name Entity Recognition
 | Input | Output |
 | ----- | ------ |
-| Domain Pre-Trained BERT model folder | Fine-Tuned BERT model folder |
+| Domain pre-trained BERT model folder | Fine-tuned BERT model folder |
 | Fine-tune training corpus (txt file) | |
 | Fine-tune eval corpus (txt file) | |
 | Fine-tune test corpus (txt file ) | |
 | Fine-tune labels (txt file) | |
 
-### Usage
+#### Usage
 To fine-tune BERT for POS tagging
 ```
 python -m scripts.domain_adaptation.fine_tune_ner \
@@ -162,8 +164,41 @@ python -m scripts.domain_adaptation.fine_tune_ner \
     --eval_all_checkpoints \
     --evaluate_during_training \
     --do_predict \
-    --save_steps 1000
+    --save_steps <num-save-steps>
 ```
+
+### Multilabel Text Classification
+| Input | Output |
+| ----- | ------ |
+| Domain pre-trained BERT model folder | Fine-tuned BERT model folder |
+| Fine-tune training corpus (txt file) | |
+| Fine-tune eval corpus (txt file) | |
+| Fine-tune test corpus (txt file ) | |
+| Fine-tune training labels (txt file ) | |
+| Fine-tune eval labels (txt file ) | |
+| Fine-tune test labels (txt file ) | |
+| Universe of fine-tune labels (txt file) | |
+
+#### Usage
+To fine-tune BERT for POS tagging
+```
+python -m scripts.domain_adaptation.fine_tun_mltc \
+    --data_dir <data-dir-containing-train-eval-and-test-FT-corpora> \
+    --labels <FT-corpus-labels> \
+    --output_dir <output-directory> \
+    --model_name_or_path <path-to-domain-pre-trained-bert-model-folder> \
+    --tokenizer_vocab <path-to-(augmented)-bert-vocab> \
+    --truncation <truncation-strategy> \
+    --do_lower_case \
+    --do_train \
+    --num_train_epochs <num-epochs> \
+    --do_eval \
+    --eval_all_checkpoints \
+    --evaluate_during_training \
+    --do_predict \
+    --save_steps <num-save-steps>
+```
+Valid values for `<truncation-strategy>` include `'first'`, `'last'` and two-comma separate values adding up to 510 (e.g. `200,31` — use first 200 and last 310 tokens).
 
 
 ---
