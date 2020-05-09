@@ -10,4 +10,5 @@ def copy_files(src: Path, dst: Path) -> None:
              'tokenizer_config.json', 'special_tokens_map.json',
              'vocab.txt')
     for file in files:
-        shutil.copyfile(str(src / file), str(dst / file))
+        if (src / file).exists():
+            shutil.copyfile(str(src / file), str(dst / file))
