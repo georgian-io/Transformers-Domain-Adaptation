@@ -19,22 +19,20 @@ fi
 # Copy cached folders
 if ! [ -e results ]; then mkdir results; fi
 
-FINE_TUNE_DATASET="linnaeus"
-PCT=100
-MOD="similar"
-EXP_NAME="pubmed_vocab_augmented_${PCT}pct"
-CORPUS="pubmed_corpus.txt"
+FINE_TUNE_DATASET="eurlex57k"
+EXP_NAME="bert/100pct"
+CORPUS="us_courts_corpus.txt"
 
-EXP_DIR="vocab_aug/$FINE_TUNE_DATASET/$EXP_NAME"
-CORPUS_PATH="biology/corpus/$CORPUS"
+EXP_DIR="$FINE_TUNE_DATASET/$EXP_NAME"
+CORPUS_PATH="law/corpus/$CORPUS"
 
 # Copy corpus and fine-tuning datasets from S3
-DOMAINS=("biology")
+DOMAINS=("law")
 SUBDIRECTORIES=("corpus" "tasks")
 for domain in $DOMAINS; do
     # Load corpus
     aws s3 cp "$BUCKET/domains/$domain/corpus/" "data/$domain/corpus" \
-        --recursive --exclude "*" --include "*.txt" --exclude "*/*"
+        --recursive --exclude "*" --include "*.txt" --exclude "*corpus*" --exclude "*/*"
 
     # Load task dataset
     aws s3 cp "$BUCKET/domains/$domain/tasks/" "data/$domain/tasks" \
@@ -53,7 +51,7 @@ function get_latest_checkpoint() {
     echo $latest_checkpoint
 }
 
-# aws s3 cp "$BUCKET/domains/$CORPUS_PATH" "data/$CORPUS_PATH"
+aws s3 cp "$BUCKET/domains/$CORPUS_PATH" "data/$CORPUS_PATH"
 
 if [ $MODE = "dpt" ]; then
     aws s3 cp "$BUCKET/runs/$EXP_DIR" \
