@@ -8,31 +8,13 @@ if ! [ $MODE = "dpt" ] && ! [ $MODE = "ft" ]; then
 fi
 
 BUCKET="s3://nlp-domain-adaptation"
-FINE_TUNE_DATASET="linnaeus"
-PCT=100
-MOD="similar"
-CORPUS="data/biology/corpus/pubmed_corpus.txt"
-FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
-EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
-TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
-OUTPUT_DIR="results/vocab_aug/$FINE_TUNE_DATASET/pubmed_vocab_augmented_${PCT}pct"
-MAX_STEPS="128194"
+FINE_TUNE_DATASET="eurlex57k"
+CORPUS="data/law/corpus/subsets/random/us_courts_corpus_random_2pct_seed42.txt"
+FINE_TUNE_TEXT="data/law/corpus/${FINE_TUNE_DATASET}_train.txt"
+EVAL_CORPUS="data/law/corpus/${FINE_TUNE_DATASET}_dev.txt"
+TASK_DIR="data/law/tasks/$FINE_TUNE_DATASET"
+OUTPUT_DIR="results/data_select/$FINE_TUNE_DATASET/2pct_random_seed42"
 CONTINUE="TRUE"
-
-LABELS=$TASK_DIR/labels.txt
-
-# NER fine tuning args
-export MAX_LENGTH=128
-export NUM_EPOCHS_NER=25
-
-# Create labels if they do not exist
-if ! [ -e $LABELS ]; then
-    python -m scripts.etl.biology.tasks.extract_ner_labels $TASK_DIR
-    if [ $? -ne 0 ]; then
-        echo "Label generation failed"
-        exit 0
-    fi
-fi
 
 # Periodically sync training artifacts to S3
 watch -n 300 \
@@ -57,7 +39,6 @@ if [ $MODE = "dpt" ]; then  # Domain pre-training
     -o $OUTPUT_DIR \
     --overwrite-output-dir \
     --fine-tune-data-dir $TASK_DIR \
-    --max-steps $MAX_STEPS \
     --batch-size 8 \
     --save-steps 2500 \
     --skip-augment-vocab \
