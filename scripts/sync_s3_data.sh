@@ -32,16 +32,13 @@ CORPUS_PATH="biology/corpus/$CORPUS"
 DOMAINS=("biology")
 SUBDIRECTORIES=("corpus" "tasks")
 for domain in $DOMAINS; do
-    # # Load corpus
-    mkdir -p "data/$domain/corpus"
+    # Load corpus
     aws s3 cp "$BUCKET/domains/$domain/corpus/" "data/$domain/corpus" \
-      --recursive --exclude "*" --include "*.txt" --exclude "*/*"
+        --recursive --exclude "*" --include "*.txt" --exclude "*/*"
 
     # Load task dataset
-    if [ $domain = "biology" ]; then
-        mkdir -p "data/$domain/tasks"
-        aws s3 cp "$BUCKET/domains/$domain/tasks/" "data/$domain/tasks" --recursive
-    fi
+    aws s3 cp "$BUCKET/domains/$domain/tasks/" "data/$domain/tasks" \
+        --recursive --exclude "*" --include "*.t*"
 done
 
 function get_latest_checkpoint() {
