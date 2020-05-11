@@ -22,6 +22,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        pos_weight=None,
     ):
         outputs = self.bert(
             input_ids,
@@ -45,7 +46,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
                 loss_fct = nn.MSELoss()
                 loss = loss_fct(logits.view(-1), labels.view(-1))
             else:
-                loss_fct = nn.BCEWithLogitsLoss()
+                loss_fct = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1, self.num_labels))
             outputs = (loss,) + outputs
 

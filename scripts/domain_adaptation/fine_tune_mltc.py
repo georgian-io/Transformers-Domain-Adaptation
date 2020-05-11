@@ -20,10 +20,13 @@ import pickle
 import random
 import logging
 import argparse
+import itertools as it
 from pathlib import Path
+from collections import Counter
 from typing import List, Tuple, Iterable
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm, trange
 from sklearn.preprocessing import MultiLabelBinarizer
 import torch
@@ -74,7 +77,8 @@ class MultiLabelTextDataset(Dataset):
                  args: argparse.Namespace,
                  block_size: int = 512,
                  chunk_size: int = 2**13,
-                 pad_token_id: int = 0):
+                 pad_token_id: int = 0,
+                ):
         # Parse cache paths for texts and labels
         cache_dir = args.output_dir / 'cache'
         cache_dir.mkdir(exist_ok=True, parents=True)
@@ -284,6 +288,20 @@ def train(args, train_dataset, model):
         epochs_trained, int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0]
     )
     set_seed(args)  # Added here for reproductibility
+
+    # Get class weights
+    label_counts = pd.Series(Counter(
+        it.chain.from_iterable(x.split()
+                               for x in Path(args.data_dir / 'train_labels.txt')
+                                        .read_text(encoding='utf-8')
+                                        .splitlines()))
+    )
+    label_counts = np.log(label_counts + 1)
+    sorted_labels = args.label.read_text('utf-8').splitlines()
+
+    class_weights = (label_counts.max() * 0.8 / label_counts)[sorted_labels].values
+    class_weights = torch.tensor(class_weights).to(args.device)
+
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -296,7 +314,7 @@ def train(args, train_dataset, model):
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
             inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[2]}
-            outputs = model(**inputs)
+            outputs = model(**inputs, pos_weight=class_weights)
             loss = outputs[0]  # model outputs are always tuple in pytorch-transformers (see doc)
 
             if args.n_gpu > 1:
