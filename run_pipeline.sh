@@ -8,7 +8,7 @@ if ! [ $MODE = "dpt" ] && ! [ $MODE = "ft" ]; then
 fi
 
 BUCKET="s3://nlp-domain-adaptation"
-FINE_TUNE_DATASET="linnaeus"
+FINE_TUNE_DATASET="BC2GM"
 PCT=100
 MOD="similar"
 CORPUS="data/biology/corpus/pubmed_corpus.txt"

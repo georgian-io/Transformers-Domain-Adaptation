@@ -19,7 +19,7 @@ fi
 # Copy cached folders
 if ! [ -e results ]; then mkdir results; fi
 
-FINE_TUNE_DATASET="linnaeus"
+FINE_TUNE_DATASET="BC2GM"
 PCT=100
 MOD="similar"
 EXP_NAME="pubmed_vocab_augmented_${PCT}pct"
