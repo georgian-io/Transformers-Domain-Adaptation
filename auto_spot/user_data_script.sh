@@ -7,6 +7,9 @@ VOLUME_TAG_NAME="$PROJ-checkpoints"
 SNAPSHOT_TAG_NAME="$VOLUME_TAG_NAME-snapshot"
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 
+# Decide whether to do DPT or FT based on instance type
+INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
+MODE=$([ $INSTANCE_TYPE = "p3.16xlarge" ] && echo "dpt" || echo "ft")
 
 # Repo constants
 USER="ubuntu"
@@ -44,7 +47,7 @@ git checkout $GIT_BRANCH
 sudo chmod -R 777 $WORK_DIR
 
 # Download data
-./scripts/sync_s3_data.sh &> $LOG_DIR/setup.log 2>&1 &
+./scripts/sync_s3_data.sh $MODE &> $LOG_DIR/setup.log 2>&1 &
 
 # Install dependencies
 sleep 120  # Wait until apt lock is released
@@ -54,7 +57,7 @@ sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36;
 
 # Initiate training
 echo "Starting training job" &> $LOG_DIR/training.log
-sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; ./run_pipeline.sh" >> $LOG_DIR/training.log 2>&1
+sudo -H -u $USER zsh -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p36; ./run_pipeline.sh $MODE" >> $LOG_DIR/training.log 2>&1
 echo "Training job complete" >> $LOG_DIR/training.log 2>&1
 
 echo "Syncing log to S3" >> $LOG_DIR/setup.log 2>&1

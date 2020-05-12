@@ -1,17 +1,21 @@
 #!/bin/zsh
+MODE=$1
+VALID_MODES=("dpt" "ft")
+if [ -z $MODE ]; then echo "Mode required as first arg."; exit 1; fi
+if ! [ $MODE = "dpt" ] && ! [ $MODE = "ft" ]; then
+    echo "Invalid `mode` provided."
+    exit 1
+fi
+
 BUCKET="s3://nlp-domain-adaptation"
 FINE_TUNE_DATASET="linnaeus"
-PCT=2
-SEED=281
-DPT_COMPLETION=$1
-if [ -z $DPT_COMPLETION ]; then echo "Require DPT COMPLETION as first arg"; exit 1; fi
-CORPUS="data/biology/corpus/shards"
+PCT=25
+CORPUS="data/biology/corpus/subsets/pubmed_corpus_random_${PCT}pct_seed42.txt"
 FINE_TUNE_TEXT="data/biology/corpus/${FINE_TUNE_DATASET}_train.txt"
 EVAL_CORPUS="data/biology/corpus/${FINE_TUNE_DATASET}_dev.txt"
 TASK_DIR="data/biology/tasks/$FINE_TUNE_DATASET"
-OUTPUT_DIR="results/$FINE_TUNE_DATASET/pubmed_${PCT}pct_seed${SEED}_${DPT_COMPLETION}pct_dpt"
-
-MAX_STEPS="10000"
+OUTPUT_DIR="results/vocab_aug/$FINE_TUNE_DATASET/pubmed_vocab_augmented_${PCT}pct_random"
+MAX_STEPS="128194"
 CONTINUE="TRUE"
 
 LABELS=$TASK_DIR/labels.txt
@@ -45,8 +49,24 @@ if [ $CONTINUE = "TRUE" ] \
 fi
 
 # Run domain adaptation
-./domain_adaptation_pipeline.sh \
+if [ $MODE = "dpt" ]; then  # Domain pre-training
+    ./domain_adaptation_pipeline.sh \
     --corpus $CORPUS \
+    --eval-corpus $EVAL_CORPUS \
+    -o $OUTPUT_DIR \
+    --overwrite-output-dir \
+    --fine-tune-data-dir $TASK_DIR \
+    --max-steps $MAX_STEPS \
+    --batch-size 8 \
+    --save-steps 2500 \
+    --skip-augment-vocab \
+    --skip-fine-tune \
+    --distributed-train \
+    -v $CONTINUE_ARG
+else  # Fine tuning
+    ./domain_adaptation_pipeline.sh \
+    --corpus $CORPUS \
+    --eval-corpus $EVAL_CORPUS \
     -o $OUTPUT_DIR \
     --overwrite-output-dir \
     --fine-tune-data-dir $TASK_DIR \
@@ -56,7 +76,7 @@ fi
     --skip-augment-vocab \
     --skip-domain-pre-train \
     -v $CONTINUE_ARG
-./scripts/sync_tb_logs.sh $OUTPUT_DIR
+fi
 
 # Run end-of-training sync
 kill $DAEMON_PID # Kill syncing daemon to prevent race conditions
