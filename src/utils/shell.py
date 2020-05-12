@@ -5,9 +5,12 @@ from subprocess import run, Popen, PIPE
 
 def run_shell(cmd: str) -> str:
     """Run a shell command using the subprocess module."""
-    return run(shlex.split(cmd),
+    process = run(shlex.split(cmd),
                stdout=PIPE, stderr=PIPE,
-               check=True, universal_newlines=True)
+               check=False, universal_newlines=True)
+    if process.returncode:
+        raise ValueError(process.stderr)
+    return process.stdout
 
 
 def is_file_in_use(filename: str) -> bool:
