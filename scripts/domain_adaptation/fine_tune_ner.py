@@ -686,10 +686,7 @@ def main():
                                 key=lambda x: results[x],
                                 reverse=(args.checkpoint_eval_metric != 'loss'))[0].split('_')[0]
         (Path(args.output_dir) / 'best_checkpoint.txt').write_text(best_checkpoint)
-        best_checkpoint_folder = (
-            Path(args.output_dir)
-            / (f'checkpoint-{best_checkpoint}' if best_checkpoint.isnumeric() else '')
-        )
+        best_checkpoint_folder = Path(args.output_dir) / f'checkpoint-{best_checkpoint}'
         logger.info(f"Best checkpoint found at checkpoint-{best_checkpoint}")
         logger.info(f"Copying best checkpoint artifacts to {args.output_dir}")
         copy_files(best_checkpoint_folder, args.output_dir)
