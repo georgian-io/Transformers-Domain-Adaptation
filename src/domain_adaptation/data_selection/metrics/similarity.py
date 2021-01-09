@@ -7,8 +7,11 @@ import scipy.stats
 import scipy.spatial.distance
 
 
-def jensen_shannon_divergence(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
-    """Calculates Jensen-Shannon divergence (https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence)."""
+def jensen_shannon_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
+    """Calculate similairty based on Jensen-Shannon divergence.
+
+    https://en.wikipedia.org/wiki/Jensen%E2%80%93Shannon_divergence
+    """
     if len(repr1) == 1:
         repr1 = np.repeat(repr1, len(repr2), axis=0)
     elif len(repr2) == 1:
@@ -26,17 +29,20 @@ def jensen_shannon_divergence(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarra
     return sim
 
 
-def renyi_divergence(
+def renyi_similarity(
     repr1: np.ndarray, repr2: np.ndarray, alpha: float = 0.99
 ) -> np.ndarray:
-    """Calculates Renyi divergence (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#R.C3.A9nyi_divergence)."""
+    """Calculate similarity based on Rényi divergence.
+
+    https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy#R.C3.A9nyi_divergence
+    """
     log_sum = (np.power(repr1, alpha) / np.power(repr2, alpha - 1)).sum(axis=-1)
-    sim = 1 / (alpha - 1) * np.log(log_sum)
-    return sim
+    renyi_divergence = 1 / (alpha - 1) * np.log(log_sum)
+    return -renyi_divergence
 
 
 def cosine_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
-    """Calculates cosine similarity (https://en.wikipedia.org/wiki/Cosine_similarity)."""
+    """Calculate cosine similarity (https://en.wikipedia.org/wiki/Cosine_similarity)."""
     if len(repr1) == 1:
         repr1 = np.repeat(repr1, len(repr2), axis=0)
     elif len(repr2) == 1:
@@ -53,24 +59,35 @@ def cosine_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
     return sim
 
 
-def euclidean_distance(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
-    """Calculates Euclidean distance (https://en.wikipedia.org/wiki/Euclidean_distance)."""
-    return np.sqrt(((repr1 - repr2) ** 2).sum(axis=-1))
+def euclidean_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
+    """Calculate similarity based on Euclidean distance.
+
+    https://en.wikipedia.org/wiki/Euclidean_distance
+    """
+    euclidean_distance = np.sqrt(((repr1 - repr2) ** 2).sum(axis=-1))
+    return -euclidean_distance
 
 
-def variational_distance(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
-    """Also known as L1 or Manhattan distance (https://en.wikipedia.org/wiki/Taxicab_geometry)."""
-    return np.abs(repr1 - repr2).sum(axis=-1)
+def variational_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
+    """Calculate similarity based on L1 / Manhattan distance.
+
+    https://en.wikipedia.org/wiki/Taxicab_geometry
+    """
+    manhattan_distance = np.abs(repr1 - repr2).sum(axis=-1)
+    return -manhattan_distance
 
 
-def bhattacharyya_distance(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
-    """Calculates Bhattacharyya distance (https://en.wikipedia.org/wiki/Bhattacharyya_distance)."""
-    sim = -np.log(np.sqrt(repr1 * repr2).sum(axis=-1))
-    assert not np.isnan(sim).any(), "Error: Similarity is nan."
+def bhattacharyya_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:
+    """Calculate similarity based on Bhattacharyya distance.
 
-    # the similarity is -inf if no term in the review is in the vocabulary
-    sim = np.where(np.isinf(sim), 0, sim)
-    return sim
+    https://en.wikipedia.org/wiki/Bhattacharyya_distance
+    """
+    distance = -np.log(np.sqrt(repr1 * repr2).sum(axis=-1))
+    assert not np.isnan(distance).any(), "Error: Similarity is nan."
+
+    # the distance is -inf if no term in the review is in the vocabulary
+    distance = np.where(np.isinf(distance), 0, distance)
+    return -distance
 
 
 ############################
@@ -101,12 +118,12 @@ def similarity_func_factory(metric: SimilarityMetric) -> SimilarityFunc:
         raise ValueError(f'"{metric}" is not a valid similarity metric.')
 
     mapping: Dict[SimilarityMetric, SimilarityFunc] = {
-        "jensen-shannon": jensen_shannon_divergence,
-        "renyi": renyi_divergence,
+        "jensen-shannon": jensen_shannon_similarity,
+        "renyi": renyi_similarity,
         "cosine": cosine_similarity,
-        "euclidean": euclidean_distance,
-        "variational": variational_distance,
-        "bhattacharyya": bhattacharyya_distance,
+        "euclidean": euclidean_similarity,
+        "variational": variational_similarity,
+        "bhattacharyya": bhattacharyya_similarity,
     }
 
     similarity_function = mapping[metric]

@@ -11,19 +11,20 @@ from ...type import Token  # TODO Use absolute import
 
 
 def number_of_term_types(example: Sequence[Token]) -> int:
-    """Counts the number of term types of the example."""
+    """Count the number of term types of the example."""
     return len(set(example))
 
 
-def type_token_ratio(example: Sequence[Token]) -> float:
-    """Calculates the type-token ratio of the example."""
+def type_token_diversity(example: Sequence[Token]) -> float:
+    """Calculate diversity based on the type-token ratio of the example."""
     if not len(example):
         return 1
-    return number_of_term_types(example) / len(example)
+    type_token_ratio = number_of_term_types(example) / len(example)
+    return -type_token_ratio
 
 
 def entropy(example: Sequence[Token], vocab2id: Dict[Token, int]) -> float:
-    """Calculates Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory))."""
+    """Calculate Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory))."""
     example = {term for term in example if term in vocab2id}
     term_ids = [vocab2id[term] for term in example]
     return scipy.stats.entropy(term_ids)
@@ -32,7 +33,7 @@ def entropy(example: Sequence[Token], vocab2id: Dict[Token, int]) -> float:
 def simpsons_index(
     example: Sequence[Token], train_term_dist: np.ndarray, vocab2id: Dict[Token, int]
 ) -> float:
-    """Calculates Simpson's Index (https://en.wikipedia.org/wiki/Diversity_index#Simpson_index)."""
+    """Calculate Simpson's Index (https://en.wikipedia.org/wiki/Diversity_index#Simpson_index)."""
     if not len(example):
         return 0
     example = {term for term in example if term in vocab2id}
@@ -44,12 +45,12 @@ def simpsons_index(
 def renyi_entropy(
     example: Sequence[Token], domain_term_dist: np.ndarray, vocab2id: Dict[Token, int]
 ) -> float:
-    """Calculates Rényi Entropy (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy)."""
+    """Calculate Rényi Entropy (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy)."""
     example = {term for term in example if term in vocab2id}
     term_ids = [vocab2id[term] for term in example]
 
     alpha = 0.99
-    summed = (domain_term_dist[term_ids]**alpha).sum()
+    summed = (domain_term_dist[term_ids] ** alpha).sum()
     if summed == 0:
         # 0 if none of the terms appear in the dictionary;
         # set to a small constant == low prob instead
@@ -90,13 +91,15 @@ def diversity_func_factory(
 
     mapping: Dict[DiversityMetric, DiversityFunction] = {
         "num_token_types": number_of_term_types,
-        "type_token_ratio": type_token_ratio,
+        "type_token_ratio": type_token_diversity,
         "entropy": partial(entropy, vocab2id=vocab2id),
         "simpsons_index": partial(
             simpsons_index, train_term_dist=train_term_dist, vocab2id=vocab2id
         ),
         "renyi_entropy": partial(
-            renyi_entropy, domain_term_dist=train_term_dist, vocab2id=vocab2id  # TODO: Double check correctness of `domain_term_dist`
+            renyi_entropy,
+            domain_term_dist=train_term_dist,
+            vocab2id=vocab2id,  # TODO: Double check correctness of `domain_term_dist`
         ),
     }
 
