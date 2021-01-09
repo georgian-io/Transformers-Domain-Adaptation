@@ -1,89 +1,104 @@
 """Module that implements vectorized versions of diversity functions."""
+# TODO: Cite code
+from functools import partial
+from typing import Callable, Dict, Literal, Sequence, get_args
+
 import numpy as np
 import scipy.stats
 
 
-def number_of_word_types(example):
-    """Counts the number of word types of the example."""
+from ...type import Token  # TODO Use absolute import
+
+
+def number_of_term_types(example: Sequence[Token]) -> int:
+    """Counts the number of term types of the example."""
     return len(set(example))
 
 
-def type_token_ratio(example):
+def type_token_ratio(example: Sequence[Token]) -> float:
     """Calculates the type-token ratio of the example."""
     if not len(example):
         return 1
-    return number_of_word_types(example) / len(example)
+    return number_of_term_types(example) / len(example)
 
 
-def entropy(example, train_term_dist, word2id):
+def entropy(example: Sequence[Token], vocab2id: Dict[Token, int]) -> float:
     """Calculates Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory))."""
-    example = {word for word in example if word in word2id}
-    word_ids = [word2id[word] for word in example]
-    return scipy.stats.entropy(word_ids)
+    example = {term for term in example if term in vocab2id}
+    term_ids = [vocab2id[term] for term in example]
+    return scipy.stats.entropy(term_ids)
 
 
-def simpsons_index(example, train_term_dist, word2id):
+def simpsons_index(
+    example: Sequence[Token], train_term_dist: np.ndarray, vocab2id: Dict[Token, int]
+) -> float:
     """Calculates Simpson's Index (https://en.wikipedia.org/wiki/Diversity_index#Simpson_index)."""
     if not len(example):
         return 0
-    example = {word for word in example if word in word2id}
-    word_ids = [word2id[word] for word in example]
-    score = (train_term_dist[word_ids]**2).sum()
+    example = {term for term in example if term in vocab2id}
+    term_ids = [vocab2id[term] for term in example]
+    score = (train_term_dist[term_ids] ** 2).sum()
     return score
 
 
-
-def quadratic_entropy(example, train_term_dist, word2id, word2vec):
-    """Calculates Quadratic Entropy."""
-    assert word2vec is not None, ('Error: Word vector representations have to '
-                                  'be available for quadratic entropy.')
-
-    if not len(example):
-        return 0
-
-    # Only retain words that exist in both `word2id` and `word2vec` since
-    # the product will be 0 otherwise
-    example = {word for word in example
-                    if (word in word2id and word in word2vec)}
-
-    # Get probabiltiies
-    word_ids = [word2id[word] for word in example]
-    p = train_term_dist[word_ids]  # (N,)
-    p_mat = p.reshape(-1, 1) * p.reshape(1, -1)  # (N, N)
-
-    # Get embeddings
-    vec = np.array([word2vec[word] for word in example])  # (N, D)
-
-    def cosine_similarity_vect(vec: np.ndarray) -> np.ndarray:
-        """Calculate cosine_similarity (vectorized).
-
-        Arguments:
-            vec {np.ndarray} -- Embeddings (N x D)
-
-        Returns:
-            np.ndarray -- Pairwise cosine similarities (N x N)
-        """
-        N, D = vec.shape
-        uv = (vec.reshape(N, 1, D) * vec.reshape(1, N, D)).mean(axis=-1)
-        uu = (vec**2).mean(axis=-1)
-        vv = (vec**2).mean(axis=-1)
-        dist = uv / np.sqrt(uu.reshape(N, 1) * vv.reshape(1, N))
-        return dist
-
-    summed = (cosine_similarity_vect(vec) * p_mat).sum()
-    return summed
-
-
-def renyi_entropy(example, domain_term_dist, word2id):
+def renyi_entropy(
+    example: Sequence[Token], domain_term_dist: np.ndarray, vocab2id: Dict[Token, int]
+) -> float:
     """Calculates Rényi Entropy (https://en.wikipedia.org/wiki/R%C3%A9nyi_entropy)."""
-    example = {word for word in example if word in word2id}
-    word_ids = [word2id[word] for word in example]
+    example = {term for term in example if term in vocab2id}
+    term_ids = [vocab2id[term] for term in example]
 
     alpha = 0.99
-    summed = (domain_term_dist[word_ids]**alpha).sum()
+    summed = (domain_term_dist[term_ids]**alpha).sum()
     if summed == 0:
-        # 0 if none of the words appear in the dictionary;
+        # 0 if none of the terms appear in the dictionary;
         # set to a small constant == low prob instead
         summed = 0.0001
     score = 1 / (1 - alpha) * np.log(summed)
     return score
+
+
+#############################
+##### Function factory #####
+#############################
+DiversityMetric = Literal[
+    "num_token_types",
+    "type_token_ratio",
+    "entropy",
+    "simpsons_index",
+    "renyi_entropy",
+]
+DiversityFunction = Callable[[Sequence[Token]], float]
+DIVERSITY_FEATURES = set(get_args(DiversityMetric))
+
+
+def diversity_func_factory(
+    metric: DiversityMetric, train_term_dist: np.ndarray, vocab2id: Dict[Token, int]
+) -> DiversityFunction:
+    """Return the corresponding diversity function based on the provided metric.
+
+    Args:
+        metric (str): Diversity metric
+        train_term_dist: Term distribution of the training data
+        vocab2id: Vocabulary-to-id mapping
+
+    Raises:
+        ValueError: If `metric` does not exist in DIVERSITY_FEATURES
+    """
+    if metric not in DIVERSITY_FEATURES:
+        raise ValueError(f'"{metric}" is not a valid diversity metric.')
+
+    mapping: Dict[DiversityMetric, DiversityFunction] = {
+        "num_token_types": number_of_term_types,
+        "type_token_ratio": type_token_ratio,
+        "entropy": partial(entropy, vocab2id=vocab2id),
+        "simpsons_index": partial(
+            simpsons_index, train_term_dist=train_term_dist, vocab2id=vocab2id
+        ),
+        "renyi_entropy": partial(
+            renyi_entropy, domain_term_dist=train_term_dist, vocab2id=vocab2id  # TODO: Double check correctness of `domain_term_dist`
+        ),
+    }
+
+    diversity_function = mapping[metric]
+    return diversity_function
