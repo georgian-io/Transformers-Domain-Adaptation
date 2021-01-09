@@ -7,7 +7,7 @@ import numpy as np
 import scipy.stats
 
 
-from ...type import Token  # TODO Use absolute import
+from nlp_domain_adaptation.type import Token
 
 
 def number_of_term_types(example: Sequence[Token]) -> int:

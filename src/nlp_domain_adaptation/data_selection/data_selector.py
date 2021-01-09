@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -7,14 +7,13 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import RobustScaler
 from transformers import PreTrainedTokenizerFast
 
-# TODO Change to absolute import
-from .metrics import (
+from nlp_domain_adaptation.type import Corpus, Token
+from nlp_domain_adaptation.data_selection.metrics import (
     SIMILARITY_FEATURES,
     DIVERSITY_FEATURES,
     similarity_func_factory,
     diversity_func_factory,
 )
-from ..type import Corpus, Token  # TODO Change to absolute import
 
 
 class DataSelector(BaseEstimator, TransformerMixin):
