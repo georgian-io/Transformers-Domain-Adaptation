@@ -53,7 +53,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
         self.diversity_metrics = diversity_metrics
 
     def to_term_dist(self, text: str) -> np.ndarray:
-        if not len(text):
+        if not len(text.strip()):
             raise ValueError(f"A non-empty string must be provided.")
 
         tokenized: List[Token] = self.tokenizer.tokenize(text)
