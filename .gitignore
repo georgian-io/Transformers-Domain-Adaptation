@@ -10,8 +10,13 @@
 *.bin
 *.pt
 
+# Dev
+*.coverage
+**.hypothesis
+
 # Volatile files for analysis
 analyses
+**.ipynb_checkpoints
 
 # Events files generated from training
 events*
