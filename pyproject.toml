@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "nlp-domain-adaptation"
+version = "0.3.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+tokenizers = "^0.9.4"
+tqdm = "^4.55.1"
+pandas = "^1.2.0"
+transformers = "^4.1.1"
+scikit-learn = "^0.24.0"
+nltk = "^3.5"
+torch = "^1.7.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.1"
+pytest-cov = "^2.10.1"
+pytest-xdist = "^2.2.0"
+pytest-mock = "^3.5.0"
+hypothesis = "^5.49.0"
+mypy = "^0.790"
+black = "^20.8b1"
+pydocstyle = "^5.1.1"
+jupyterlab = "^3.0.3"
+ipywidgets = "^7.6.3"
+jedi = "<0.18.0"  # Temp until bug is fixed (https://github.com/ipython/ipython/issues/12740#issuecomment-751274036)
+matplotlib = "^3.3.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
