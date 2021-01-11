@@ -3,9 +3,9 @@ from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import RobustScaler
 from transformers import PreTrainedTokenizerFast
+from sklearn.base import BaseEstimator, TransformerMixin
 
 from nlp_domain_adaptation.type import Corpus, Token
 from nlp_domain_adaptation.data_selection.metrics import (
