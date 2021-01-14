@@ -1,14 +1,16 @@
 from collections import Counter
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union, Counter as CounterType
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from scipy import sparse
 from sklearn.preprocessing import RobustScaler
 from transformers import PreTrainedTokenizerFast
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from nlp_domain_adaptation.type import Corpus, Token
-from nlp_domain_adaptation.data_selection.metrics import (
+from transformers_domain_adaptation.type import Corpus, Token
+from transformers_domain_adaptation.data_selection.metrics import (
     SIMILARITY_FEATURES,
     DIVERSITY_FEATURES,
     similarity_func_factory,
@@ -69,6 +71,31 @@ class DataSelector(BaseEstimator, TransformerMixin):
 
         return term_dist
 
+    def to_term_dist_batch(self, texts: Sequence[str]) -> np.ndarray:
+        # * Assumption: Token ID 0 is a special token id and never appears in tokenization with `add_special_tokens=False`
+
+        # Tokenize all documents using Rust tokenizer
+        counters: List[CounterType[int]] = [
+            Counter(enc.ids)
+            for enc in self.tokenizer.backend_tokenizer.encode_batch(
+                texts, add_special_tokens=False
+            )
+        ]
+
+        rows = np.array(
+            [val for i, counter in enumerate(counters) for val in [i] * len(counter)]
+        )
+        cols = np.array([key for counter in counters for key in counter.keys()])
+        data = np.array([value for counter in counters for value in counter.values()])
+        term_counts = sparse.csr_matrix(
+            (data, (rows, cols)),
+            shape=(len(counters), len(self.tokenizer)),
+            dtype=np.uint16 if len(self.tokenizer) < 2**16 else np.uint32,
+        )
+
+        term_dist = term_counts / term_counts.sum(axis=1)
+        return np.array(term_dist)
+
     def fit(self, ft_corpus: Corpus):
         """Compute corpus-level term distribution of `ft_corpus`.
 
@@ -122,9 +149,15 @@ class DataSelector(BaseEstimator, TransformerMixin):
         ):  # Short-circuit function to avoid unnecessary computations
             return similarities
 
-        term_dists = np.stack([self.to_term_dist(doc) for doc in docs], axis=0)
+        term_dists = self.to_term_dist_batch(docs)
 
-        for metric in self.similarity_metrics:
+        pbar = tqdm(
+            self.similarity_metrics,
+            desc="computing similarity",
+            unit="metric",
+            dynamic_ncols=True,
+        )
+        for metric in pbar:
             sim_func = similarity_func_factory(metric)
             similarities[metric] = sim_func(
                 term_dists, self.ft_term_dist_.reshape(1, -1)
@@ -138,10 +171,16 @@ class DataSelector(BaseEstimator, TransformerMixin):
             return diversities
 
         tokenized_docs: List[List[Token]] = [
-            self.tokenizer.tokenize(doc) for doc in docs
+            enc.tokens for enc in self.tokenizer.backend_tokenizer.encode_batch(docs)
         ]
 
-        for metric in self.diversity_metrics:
+        pbar = tqdm(
+            self.diversity_metrics,
+            desc="computing diversity",
+            unit="metric",
+            dynamic_ncols=True,
+        )
+        for metric in pbar:
             div_func = diversity_func_factory(
                 metric,
                 train_term_dist=self.ft_term_dist_,

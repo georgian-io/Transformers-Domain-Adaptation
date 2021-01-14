@@ -1,13 +1,14 @@
 """Module that implements vectorized versions of diversity functions."""
 # TODO: Cite code
 from functools import partial
-from typing import Callable, Dict, Literal, Sequence, get_args
+from typing import Callable, Dict, Sequence
+from typing_extensions import Literal
 
 import numpy as np
 import scipy.stats
 
 
-from nlp_domain_adaptation.type import Token
+from transformers_domain_adaptation.type import Token
 
 
 def number_of_term_types(example: Sequence[Token]) -> int:
@@ -70,7 +71,13 @@ DiversityMetric = Literal[
     "renyi_entropy",
 ]
 DiversityFunction = Callable[[Sequence[Token]], float]
-DIVERSITY_FEATURES = set(get_args(DiversityMetric))
+DIVERSITY_FEATURES = {
+    "num_token_types",
+    "type_token_ratio",
+    "entropy",
+    "simpsons_index",
+    "renyi_entropy",
+}
 
 
 def diversity_func_factory(

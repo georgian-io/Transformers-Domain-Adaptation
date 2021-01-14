@@ -6,8 +6,8 @@ from tempfile import NamedTemporaryFile
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
-from nlp_domain_adaptation.type import Corpus
-from nlp_domain_adaptation.vocab_augmentor import VocabAugmentor
+from transformers_domain_adaptation.type import Corpus
+from transformers_domain_adaptation.vocab_augmentor import VocabAugmentor
 
 
 TOKENIZERS_TO_TEST = ("bert-base-uncased", "bert-base-cased", "roberta-base")

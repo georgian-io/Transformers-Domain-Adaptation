@@ -1,6 +1,7 @@
 #
 # TODO: Cite code
-from typing import Callable, Dict, Literal, get_args
+from typing import Callable, Dict
+from typing_extensions import Literal
 
 import numpy as np
 import scipy.stats
@@ -102,7 +103,14 @@ SimilarityMetric = Literal[
     "bhattacharyya",
 ]
 SimilarityFunc = Callable[[np.ndarray, np.ndarray], np.ndarray]
-SIMILARITY_FEATURES = set(get_args(SimilarityMetric))
+SIMILARITY_FEATURES = {
+    "jensen-shannon",
+    "renyi",
+    "cosine",
+    "euclidean",
+    "variational",
+    "bhattacharyya",
+}
 
 
 def similarity_func_factory(metric: SimilarityMetric) -> SimilarityFunc:

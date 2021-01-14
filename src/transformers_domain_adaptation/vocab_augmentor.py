@@ -13,23 +13,24 @@ from transformers import PreTrainedTokenizerFast
 from tokenizers.implementations import BaseTokenizer
 from tokenizers.models import BPE, Unigram, WordPiece
 
-from nlp_domain_adaptation.type import Corpus, Token
+from transformers_domain_adaptation.type import Corpus, Token
 
 
 class VocabAugmentor(BaseEstimator):
-    """Find new tokens to add to a tokenizer's vocabulary.
+    """Find new tokens to add to a :obj:`tokenizer`'s vocabulary.
 
     A new vocabulary is learnt from the training corpus,
     from which the most common tokens that do not exist
     in the existing vocabulary are selected.
 
-    Attributes:
+    Args:
         tokenizer: A fast transformers tokenizer
         cased: If False, ignore uppercases in corpus
         target_vocab_size: Size of augmented vocabulary
-        model_cls: Tokenization model class
-        rust_tokenizer: A Rust implementation of the tokenizer class as `tokenizer`. May be untrained.
-        trainer: A `tokenizers` Trainer object to train `rust_tokenizer`
+
+    Raises:
+        ValueError: If :obj:`target_vocab_size` is larger or equal to the existing vocabulary of :obj:`tokenizer`
+        RuntimeError: If :obj:`tokenizer` uses an unsupported tokenization model
     """
 
     supported_trainers = MappingProxyType(
@@ -43,17 +44,6 @@ class VocabAugmentor(BaseEstimator):
     def __init__(
         self, tokenizer: PreTrainedTokenizerFast, cased: bool, target_vocab_size: int
     ):
-        """Init function.
-
-        Args:
-            tokenizer: A fast transformers tokenizer
-            cased: If False, ignore uppercases in corpus
-            target_vocab_size: Size of augmented vocabulary
-
-        Raises:
-            ValueError: If `target_vocab_size` is larger or equal to the existing vocabulary of `tokenizer`
-            RuntimeError: If `tokenizer` uses an unsupported tokenization model
-        """
         if target_vocab_size <= tokenizer.vocab_size:
             raise ValueError(
                 f"Ensure that `target_vocab_size` is larger than tokenizer's vocab size."
@@ -85,9 +75,9 @@ class VocabAugmentor(BaseEstimator):
         self,
         training_corpus: Union[Corpus, Path, str],
     ) -> List[Token]:
-        """Obtain new tokens found in `training_corpus`.
+        """Obtain new tokens found in :obj:`training_corpus`.
 
-        New tokens contains the most common tokens that do not exist in the tokenizer's vocabulary.
+        New tokens contains the most common tokens that do not exist in the :obj:`tokenizer`'s vocabulary.
 
         Args:
             training_corpus: The training corpus.
