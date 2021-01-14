@@ -11,11 +11,15 @@
 *.pt
 
 # Dev
-*.coverage
+*.coverage*
 **.hypothesis
+docs/build/
+dist/
+build/
+**.egg-info*
 
 # Volatile files for analysis
-analyses
+analyses/
 **.ipynb_checkpoints
 
 # Events files generated from training
