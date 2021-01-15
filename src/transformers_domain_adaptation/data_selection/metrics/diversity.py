@@ -25,7 +25,7 @@ def type_token_diversity(example: Sequence[Token]) -> float:
 
 
 def entropy(example: Sequence[Token], vocab2id: Dict[Token, int]) -> float:
-    """Calculate Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory))."""
+    """Calculate Entropy (https://en.wikipedia.org/wiki/Entropy_(information_theory%29#Definition)."""
     example = {term for term in example if term in vocab2id}
     term_ids = [vocab2id[term] for term in example]
     return scipy.stats.entropy(term_ids)

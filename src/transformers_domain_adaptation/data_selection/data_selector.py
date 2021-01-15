@@ -19,18 +19,38 @@ from transformers_domain_adaptation.data_selection.metrics import (
 
 
 class DataSelector(BaseEstimator, TransformerMixin):
+    """Select subset of data that is likely to be beneficial for domain pre-training.
+
+    This class is sklearn-compatible and implements the sklearn Transformers interface.
+    """
+
     def __init__(
         self,
-        select: Union[int, float],
+        keep: Union[int, float],
         tokenizer: PreTrainedTokenizerFast,
         similarity_metrics: Optional[Sequence[str]] = None,
         diversity_metrics: Optional[Sequence[str]] = None,
     ):
-        if isinstance(select, int) and select <= 0:
-            raise ValueError(f"Int value for `select` must be strictly positive.")
-        if isinstance(select, float) and not 0 <= select <= 1:
+        """
+        Args:
+            keep: Quantity of documents from corpus to keep.
+                  To specify number of documents, use :obj:`int`.
+                  To specify percentage of documents in corpus, use :obj:`float`.
+            tokenizer: A Rust-based 🤗 Tokenizer
+            similarity_metrics: An optional list of similarity metrics
+            diversity_metrics: An optional list of diversity metrics
+
+        Note:
+            For a list of similarity and diversity metrics, refer to :ref:`data-selection-metrics`
+
+        Note:
+            At least one similarity/diversity metric must be provided.
+        """
+        if isinstance(keep, int) and keep <= 0:
+            raise ValueError(f"Int value for `keep` must be strictly positive.")
+        if isinstance(keep, float) and not 0 <= keep <= 1:
             raise ValueError(
-                f"Float value for `select` must be between 0 and 1 (inclusive)."
+                f"Float value for `keep` must be between 0 and 1 (inclusive)."
             )
         if similarity_metrics is not None:
             _invalid_sim_metrics = set(similarity_metrics) - SIMILARITY_FEATURES
@@ -49,7 +69,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
                 f"No metrics provided. Please provide at least one similarity or diversity metric."
             )
 
-        self.select = select
+        self.keep = keep
         self.tokenizer = tokenizer
         self.similarity_metrics = similarity_metrics
         self.diversity_metrics = diversity_metrics
@@ -97,29 +117,38 @@ class DataSelector(BaseEstimator, TransformerMixin):
         return np.array(term_dist)
 
     def fit(self, ft_corpus: Corpus):
-        """Compute corpus-level term distribution of `ft_corpus`.
+        """Compute corpus-level term distribution of :obj:`ft_corpus`.
 
-        A new fitted attribute `.ft_term_dist_` of shape (V,) is created,
-        where V is the size of the tokenizer vocabulary.
-
-        Note:
-            The `ft_corpus` is treated as a single "document", which will be compared
-            against other documents in the in-domain corpus in `.transform`
+        A new fitted attribute ``.ft_term_dist_`` of shape (:math:`V`,) is created,
+        where :math:`V` is the size of the :obj:`tokenizer` vocabulary.
 
         Args:
-            ft_corpus: Fine-tuning corpus
+            ft_corpus: The fine-tuning corpus. Not to be confused with
+                       the domain pre-training corpus (which is used in :meth:`transform`)
+
+        Note:
+            The :obj:`ft_corpus` is treated as a single "document", which will be compared
+            against other documents in the in-domain corpus in :meth:`transform`
         """
         self.ft_term_dist_ = self.to_term_dist(" ".join(ft_corpus))
         return self
 
     def transform(self, docs: Corpus) -> Corpus:
+        """Create a relevant subset of documents from the training corpus based on the provided data selection metrics.
+
+        Args:
+            docs: The training corpus
+
+        Returns:
+            A subset of relevant :obj:`docs` for domain pre-training
+        """
         scores = self.compute_metrics(docs)
         composite_scores = scores["composite"].sort_values(ascending=False)
 
         n_select = (
-            self.select
-            if isinstance(self.select, int)
-            else int(self.select * len(docs))
+            self.keep
+            if isinstance(self.keep, int)
+            else int(self.keep * len(docs))
         )
         selection_index = composite_scores.index[:n_select]
         subset_corpus = pd.Series(docs)[selection_index]

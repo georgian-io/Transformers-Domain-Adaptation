@@ -19,18 +19,10 @@ from transformers_domain_adaptation.type import Corpus, Token
 class VocabAugmentor(BaseEstimator):
     """Find new tokens to add to a :obj:`tokenizer`'s vocabulary.
 
-    A new vocabulary is learnt from the training corpus,
-    from which the most common tokens that do not exist
+    A new vocabulary is learnt from the training corpus
+    using the same tokenization model (WordPiece, BPE, Unigram).
+    The most common tokens of this new vocabulary that do not exist
     in the existing vocabulary are selected.
-
-    Args:
-        tokenizer: A fast transformers tokenizer
-        cased: If False, ignore uppercases in corpus
-        target_vocab_size: Size of augmented vocabulary
-
-    Raises:
-        ValueError: If :obj:`target_vocab_size` is larger or equal to the existing vocabulary of :obj:`tokenizer`
-        RuntimeError: If :obj:`tokenizer` uses an unsupported tokenization model
     """
 
     supported_trainers = MappingProxyType(
@@ -44,6 +36,16 @@ class VocabAugmentor(BaseEstimator):
     def __init__(
         self, tokenizer: PreTrainedTokenizerFast, cased: bool, target_vocab_size: int
     ):
+        """
+        Args:
+            tokenizer: A Rust-based 🤗 Tokenizer
+            cased: If False, ignore uppercases in corpus
+            target_vocab_size: Size of augmented vocabulary
+
+        Raises:
+            ValueError: If :obj:`target_vocab_size` is larger or equal to the existing vocabulary of :obj:`tokenizer`
+            RuntimeError: If :obj:`tokenizer` uses an unsupported tokenization model
+        """
         if target_vocab_size <= tokenizer.vocab_size:
             raise ValueError(
                 f"Ensure that `target_vocab_size` is larger than tokenizer's vocab size."
@@ -80,7 +82,7 @@ class VocabAugmentor(BaseEstimator):
         New tokens contains the most common tokens that do not exist in the :obj:`tokenizer`'s vocabulary.
 
         Args:
-            training_corpus: The training corpus.
+            training_corpus: The training corpus
         """
         # Training has to be wrapped with the `tmpfile` context
         with NamedTemporaryFile("w+") as tmpfile:  # If we need to save Corpus type
