@@ -1,0 +1,4 @@
+sphinx==3.4.3
+sphinx-rtd-theme==0.5.1
+sphinxcontrib-bibtex==2.1.4
+transformers-domain-adaptation==0.3.0a2

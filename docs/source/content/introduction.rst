@@ -1,6 +1,6 @@
 Introduction
 ============
-Transformers Domain Adaptation improves the performance transformer models on downstream NLP tasks,
+Transformers Domain Adaptation improves the performance of HuggingFace transformer models on downstream NLP tasks,
 by domain-adapting models to the target domain of said NLP tasks (e.g. BERT -> LawBERT).
 
 

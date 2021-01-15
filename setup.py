@@ -24,6 +24,9 @@ setup(
         "tokenizers>=0.9,<0.10",
         "datasets>=1.2,<1.3",
         "pandas",
-        "torch>=1.7,<1.8"
+        "torch>=1.7,<1.8",
+        "scipy==1.5.4",
+        "scikit-learn",
+        "tqdm",
     ]
 )
