@@ -7,6 +7,7 @@
 </p>
 
 [![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)](https://www.python.org/downloads/release/python-369/)
+![Python package](https://github.com/georgianpartners/Transformers-Domain-Adaptation/workflows/Python%20package/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/transformers-domain-adaptation/badge/?version=latest)](https://transformers-domain-adaptation.readthedocs.io/en/latest/?badge=latest)
 
 </div>
