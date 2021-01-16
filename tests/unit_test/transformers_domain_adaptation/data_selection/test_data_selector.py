@@ -17,7 +17,7 @@ def tokenizer() -> PreTrainedTokenizerFast:
 @pytest.fixture
 def data_selector(tokenizer) -> DataSelector:
     return DataSelector(
-        select=2,
+        keep=2,
         tokenizer=tokenizer,
         similarity_metrics=[
             "jensen-shannon",
@@ -54,37 +54,37 @@ def corpus() -> Corpus:
 ##################################
 ##### Input validation tests #####
 ##################################
-@given(select=st.integers(max_value=0))
-def test_DataSelector_raise_error_with_zero_or_negative_select_int(select, tokenizer):
+@given(keep=st.integers(max_value=0))
+def test_DataSelector_raise_error_with_zero_or_negative_select_int(keep, tokenizer):
     with pytest.raises(ValueError):
         DataSelector(
-            select=select, tokenizer=tokenizer, similarity_metrics=["euclidean"]
+            keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"]
         )
 
 
 @given(
-    select=st.one_of(
+    keep=st.one_of(
         st.floats(None, 0, exclude_max=True), st.floats(1, None, exclude_min=True)
     )
 )
-def test_DataSelector_raise_error_with_invalid_select_float(select, tokenizer):
+def test_DataSelector_raise_error_with_invalid_select_float(keep, tokenizer):
     with pytest.raises(ValueError):
         DataSelector(
-            select=select, tokenizer=tokenizer, similarity_metrics=["euclidean"]
+            keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"]
         )
 
 
 def test_DataSelector_raise_error_with_invalid_similarity_metric(tokenizer):
     with pytest.raises(ValueError):
         DataSelector(
-            select=2, tokenizer=tokenizer, similarity_metrics=["invalid_metric"]
+            keep=2, tokenizer=tokenizer, similarity_metrics=["invalid_metric"]
         )
 
 
 def test_DataSelector_raise_error_with_invalid_diversity_metric(tokenizer):
     with pytest.raises(ValueError):
         DataSelector(
-            select=2, tokenizer=tokenizer, diversity_metrics=["invalid_metric"]
+            keep=2, tokenizer=tokenizer, diversity_metrics=["invalid_metric"]
         )
 
 
@@ -92,7 +92,7 @@ def test_DataSelector_raise_error_when_both_similarity_and_diversity_metrics_are
     tokenizer,
 ):
     with pytest.raises(ValueError):
-        DataSelector(select=0.5, tokenizer=tokenizer)
+        DataSelector(keep=0.5, tokenizer=tokenizer)
 
 
 #################################
@@ -159,12 +159,12 @@ def test_compute_metrics_adds_composite_score_column(
 ##############################
 ##### DataSelector tests #####
 ##############################
-@pytest.mark.parametrize("select", (2, 5))
+@pytest.mark.parametrize("keep", (2, 5))
 def test_DataSelector_selects_correct_num_of_docs_with_int_select_arg(
-    corpus: Corpus, tokenizer: PreTrainedTokenizerFast, select: int
+    corpus: Corpus, tokenizer: PreTrainedTokenizerFast, keep: int
 ):
     data_selector = DataSelector(
-        select=select,
+        keep=keep,
         tokenizer=tokenizer,
         similarity_metrics=[
             "jensen-shannon",
@@ -183,20 +183,20 @@ def test_DataSelector_selects_correct_num_of_docs_with_int_select_arg(
         ],
     )
     selected_corpus = data_selector.fit_transform(corpus)
-    assert len(selected_corpus) == select
+    assert len(selected_corpus) == keep
 
 
 @pytest.mark.parametrize(
-    "select,correct_n_docs", ((0.01, 0), (0.2, 1), (0.8, 5), (1.0, 7))
+    "keep,correct_n_docs", ((0.01, 0), (0.2, 1), (0.8, 5), (1.0, 7))
 )
 def test_DataSelector_selects_correct_num_of_docs_with_float_select_arg(
     corpus: Corpus,
     tokenizer: PreTrainedTokenizerFast,
-    select: float,
+    keep: float,
     correct_n_docs: int,
 ):
     data_selector = DataSelector(
-        select=select,
+        keep=keep,
         tokenizer=tokenizer,
         similarity_metrics=[
             "jensen-shannon",

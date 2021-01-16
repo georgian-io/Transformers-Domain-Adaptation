@@ -110,7 +110,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
         term_counts = sparse.csr_matrix(
             (data, (rows, cols)),
             shape=(len(counters), len(self.tokenizer)),
-            dtype=np.uint16 if len(self.tokenizer) < 2**16 else np.uint32,
+            dtype=np.uint16 if len(self.tokenizer) < 2 ** 16 else np.uint32,
         )
 
         term_dist = term_counts / term_counts.sum(axis=1)
@@ -146,9 +146,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
         composite_scores = scores["composite"].sort_values(ascending=False)
 
         n_select = (
-            self.keep
-            if isinstance(self.keep, int)
-            else int(self.keep * len(docs))
+            self.keep if isinstance(self.keep, int) else int(self.keep * len(docs))
         )
         selection_index = composite_scores.index[:n_select]
         subset_corpus = pd.Series(docs)[selection_index]
