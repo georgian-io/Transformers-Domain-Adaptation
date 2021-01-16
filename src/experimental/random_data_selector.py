@@ -3,7 +3,7 @@ from typing import Optional, Union
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from nlp_domain_adaptation.type import Corpus
+from transformers_domain_adaptation.type import Corpus
 
 
 class RandomDataSelector(BaseEstimator, TransformerMixin):
