@@ -14,7 +14,7 @@
 This toolkit improves the performance of HuggingFace transformer models on downstream NLP tasks,
 by domain-adapting models to the target domain of said NLP tasks (e.g. BERT -> LawBERT).
 
-![](docs/source/images/domain_adaptation_diagram.png)
+![](docs/source/domain_adaptation_diagram.png)
 
 The overall Domain Adaptation framework can be broken down into three phases:
 1. Data Selection

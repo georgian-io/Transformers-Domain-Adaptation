@@ -5,7 +5,7 @@ Domain Adaptation Components
 This page contains more details on each component of the Domain Adaptation
 framework, and example usage of ``transformers_domain_adaptation`` classes.
 
-.. image:: ../images/domain_adaptation_diagram.png
+.. image:: ../domain_adaptation_diagram.png
 
 .. testsetup:: ds,va
 

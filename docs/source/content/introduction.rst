@@ -24,7 +24,7 @@ it can be used as better starting point to fine-tune on multiple downstream NLP 
 The Domain Adaptation Framework
 -------------------------------
 
-.. image:: ../images/domain_adaptation_diagram.png
+.. image:: ../domain_adaptation_diagram.png
 
 
 Corpora Types
