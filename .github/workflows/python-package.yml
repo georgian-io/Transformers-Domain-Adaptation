@@ -28,6 +28,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt -r requirements_dev.txt
+        python -m pip install transformers-domain-adaptation
     - name: Run unit tests with pytest
       run: |
         pytest tests/unit_test --cov src/transformers_domain_adaptation --cov-report term-missing:skip-covered
