@@ -9,7 +9,7 @@ setup(
     name="transformers-domain-adaptation",
     version="0.3.0a1",
     description="Adapt Transformer-based language models to new text domains",
-    url="https://github.com/georgianpartners/NLP-Domain-Adaptation",
+    url="https://github.com/georgianpartners/Transformers-Domain-Adaptation",
     author="Christopher Tee",
     author_email="chris@georgian.io",
     license="MIT",

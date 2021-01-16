@@ -2,12 +2,12 @@
 
 <h1 style="text-align:center">Transformers Domain Adaptation</h1>
 <p align="center">
-    <a href="https://nlp-domain-adaptation.readthedocs.io/en/latest/content/domain_adaptation_components.html">Documentation</a> •
-    <a href="https://colab.research.google.com/github/georgianpartners/NLP-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb">Colab Guide</a>
+    <a href="https://transformers-domain-adaptation.readthedocs.io/en/latest/content/introduction.html">Documentation</a> •
+    <a href="https://colab.research.google.com/github/georgianpartners/Transformers-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb">Colab Guide</a>
 </p>
 
 [![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)](https://www.python.org/downloads/release/python-369/)
-[![Documentation Status](https://readthedocs.org/projects/nlp-domain-adaptation/badge/?version=latest)](https://nlp-domain-adaptation.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/transformers-domain-adaptation/badge/?version=latest)](https://transformers-domain-adaptation.readthedocs.io/en/latest/?badge=latest)
 
 </div>
 
@@ -44,7 +44,7 @@ pip install transformers-domain-adaptation
 ## Usage
 Please refer to our Colab guide!
 
-<a href="https://colab.research.google.com/github/georgianpartners/NLP-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+<a href="https://colab.research.google.com/github/georgianpartners/Transformers-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 
 ## Results
