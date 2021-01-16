@@ -13,12 +13,31 @@ setup(
     author="Christopher Tee",
     author_email="chris@georgian.io",
     license="MIT",
+    python_requires=">=3.6",
+    keywords=[
+        "transformers",
+        "tokenizers",
+        "huggingface",
+        "pytorch",
+        "domain-adaptation",
+        "transfer-learning",
+        "natural-language-processing",
+    ],
     classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "License :: OSI Approved :: MIT License",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Text Processing :: General",
     ],
     package_dir={"": "src"},
-    packages=find_packages(where='src', exclude=("etl*", "utils*", "experimental*", "tests")),
+    packages=find_packages(
+        where="src", exclude=("etl*", "utils*", "experimental*", "tests")
+    ),
     install_requires=[
         "transformers>=4,<5",
         "tokenizers>=0.9,<0.10",
@@ -28,5 +47,5 @@ setup(
         "scipy==1.5.4",
         "scikit-learn",
         "tqdm",
-    ]
+    ],
 )
