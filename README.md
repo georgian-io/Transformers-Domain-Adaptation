@@ -6,7 +6,8 @@
     <a href="https://colab.research.google.com/github/georgianpartners/Transformers-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb">Colab Guide</a>
 </p>
 
-[![Python 3.6](https://img.shields.io/badge/python-3.6-blue.svg)](https://www.python.org/downloads/release/python-369/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/transformers-domain-adaptation)](https://pypi.org/project/transformers-domain-adaptation/)
+[![PyPI version](https://badge.fury.io/py/transformers-domain-adaptation.svg)](https://badge.fury.io/py/transformers-domain-adaptation)
 ![Python package](https://github.com/georgianpartners/Transformers-Domain-Adaptation/workflows/Python%20package/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/transformers-domain-adaptation/badge/?version=latest)](https://transformers-domain-adaptation.readthedocs.io/en/latest/?badge=latest)
 
