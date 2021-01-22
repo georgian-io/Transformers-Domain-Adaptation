@@ -9,7 +9,7 @@ with open("README.md", encoding="utf-8") as f:
 
 setup(
     name="transformers-domain-adaptation",
-    version="0.3.0",
+    version="0.3.1",
     description="Adapt Transformer-based language models to new text domains",
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
