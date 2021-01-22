@@ -4,11 +4,14 @@ from setuptools import setup, find_packages
 
 HERE = Path(__file__).parent
 README = (HERE / "README.md").read_text()
+with open("README.md", encoding="utf-8") as f:
+    LONG_DESCRIPTION = f.read()
 
 setup(
     name="transformers-domain-adaptation",
-    version="0.3.0a1",
+    version="0.3.0a3",
     description="Adapt Transformer-based language models to new text domains",
+    long_description=LONG_DESCRIPTION,
     url="https://github.com/georgianpartners/Transformers-Domain-Adaptation",
     author="Christopher Tee",
     author_email="chris@georgian.io",
