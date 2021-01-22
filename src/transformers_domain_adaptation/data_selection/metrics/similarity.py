@@ -1,5 +1,8 @@
-#
-# TODO: Cite code
+"""Similiarity metrics for data selection introduced by Ruder and Plank.
+
+The functions here were adapted and vectorized
+from those in the authors' `repo <https://github.com/sebastianruder/learn-to-select-data/blob/master/similarity.py>`_.
+"""
 from typing import Callable, Dict
 from typing_extensions import Literal
 
