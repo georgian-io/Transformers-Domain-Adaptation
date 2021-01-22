@@ -9,9 +9,10 @@ with open("README.md", encoding="utf-8") as f:
 
 setup(
     name="transformers-domain-adaptation",
-    version="0.3.0a3",
+    version="0.3.0",
     description="Adapt Transformer-based language models to new text domains",
     long_description=LONG_DESCRIPTION,
+    long_description_content_type="text/markdown",
     url="https://github.com/georgianpartners/Transformers-Domain-Adaptation",
     author="Christopher Tee",
     author_email="chris@georgian.io",
