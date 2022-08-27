@@ -1,17 +1,19 @@
 """Class definition for VocabAugmentor."""
-from pathlib import Path
 from collections import Counter
-from types import MappingProxyType
+from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import IO, List, Type, Union, Counter as CounterType
+from types import MappingProxyType
+from typing import IO
+from typing import Counter as CounterType
+from typing import List, Type, Union
 
 from sklearn.base import BaseEstimator
 from tokenizers import Tokenizer, trainers
+from tokenizers.implementations import BaseTokenizer
+from tokenizers.models import BPE, Unigram, WordPiece
 from tokenizers.normalizers import Lowercase
 from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast
-from tokenizers.implementations import BaseTokenizer
-from tokenizers.models import BPE, Unigram, WordPiece
 
 from transformers_domain_adaptation.type import Corpus, Token
 

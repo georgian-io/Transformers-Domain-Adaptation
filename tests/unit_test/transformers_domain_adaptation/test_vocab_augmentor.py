@@ -1,14 +1,13 @@
-from typing import IO
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import IO
 
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 from transformers_domain_adaptation.type import Corpus
 from transformers_domain_adaptation.vocab_augmentor import VocabAugmentor
-
 
 TOKENIZERS_TO_TEST = ("bert-base-uncased", "bert-base-cased", "roberta-base")
 
@@ -103,7 +102,7 @@ def test__get_training_files_correctness_single_directory(
     corpus_dir = tmp_path
     # Create multiple text files
     for i in range(3):
-        (corpus_dir / f'corpus{i}.txt').write_text("")
+        (corpus_dir / f"corpus{i}.txt").write_text("")
 
     train_files = VocabAugmentor._get_training_files(
         corpus_dir if input_corpus_as_str else Path(corpus_dir), named_tmpfile

@@ -9,7 +9,7 @@ framework, and example usage of ``transformers_domain_adaptation`` classes.
 
 .. testsetup:: ds,va
 
-    from transformers import AutoTokenizer, AutoModelForMaskedLM
+    from transformers import AutoModelForMaskedLM, AutoTokenizer
 
     model_card = 'distilbert-base-uncased'
     model = AutoModelForMaskedLM.from_pretrained(model_card)
@@ -143,7 +143,7 @@ This step has three purposes:
 
 A model can be domain-adapted using HuggingFace's `Trainer and TrainingArguments <https://huggingface.co/transformers/main_classes/trainer.html>`_ classes::
 
-    from transformers import TrainingArguments, Trainer
+    from transformers import Trainer, TrainingArguments
 
     training_args = TrainingArguments(...)
 

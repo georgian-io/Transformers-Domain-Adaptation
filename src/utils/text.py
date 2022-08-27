@@ -9,18 +9,18 @@ def clean(text: str, lowercase: bool = False) -> str:
         1. Replace whitespace characters with space
         2. Fix corrupted text encodings
         3. Lowercase (if specified)
-    
+
     Arguments:
         text {str} -- Text to clean
-    
+
     Keyword Arguments:
         lowercase {bool} -- If True, perform lowercasing (default: {False})
-    
+
     Returns:
         str -- Cleaned text
     """
     # Replace whitespace characters with spaces
-    text = ' '.join(text.split())
+    text = " ".join(text.split())
 
     # Fix encoded texts
     text = fix_text(text)
