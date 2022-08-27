@@ -88,7 +88,7 @@ class VocabAugmentor(BaseEstimator):
         with NamedTemporaryFile("w+") as tmpfile:  # If we need to save Corpus type
             # Train new tokenizer on `ft_corpus`
             train_files = self._get_training_files(training_corpus, _tmpfile=tmpfile)
-            self.rust_tokenizer.train(self.trainer, train_files)
+            self.rust_tokenizer.train(train_files, self.trainer)
 
             # Include unknown token to vocab
             with TemporaryDirectory() as tmpdir:
