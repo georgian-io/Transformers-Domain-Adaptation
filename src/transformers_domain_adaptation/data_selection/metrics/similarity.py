@@ -3,12 +3,11 @@
 The functions here were adapted and vectorized
 from those in the authors' `repo <https://github.com/sebastianruder/learn-to-select-data/blob/master/similarity.py>`_.
 """
-from typing import Callable, Dict
-from typing_extensions import Literal
+from typing import Callable, Dict, Literal
 
 import numpy as np
-import scipy.stats
 import scipy.spatial.distance
+import scipy.stats
 
 
 def jensen_shannon_similarity(repr1: np.ndarray, repr2: np.ndarray) -> np.ndarray:

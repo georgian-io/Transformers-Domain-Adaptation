@@ -1,21 +1,22 @@
 from collections import Counter
-from typing import List, Optional, Sequence, Union, Counter as CounterType
+from typing import Counter as CounterType
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from scipy import sparse
-from sklearn.preprocessing import RobustScaler
-from transformers import PreTrainedTokenizerFast
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import RobustScaler
+from tqdm import tqdm
+from transformers import PreTrainedTokenizerFast
 
-from transformers_domain_adaptation.type import Corpus, Token
 from transformers_domain_adaptation.data_selection.metrics import (
-    SIMILARITY_FEATURES,
     DIVERSITY_FEATURES,
-    similarity_func_factory,
+    SIMILARITY_FEATURES,
     diversity_func_factory,
+    similarity_func_factory,
 )
+from transformers_domain_adaptation.type import Corpus, Token
 
 
 class DataSelector(BaseEstimator, TransformerMixin):
@@ -110,7 +111,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
         term_counts = sparse.csr_matrix(
             (data, (rows, cols)),
             shape=(len(counters), len(self.tokenizer)),
-            dtype=np.uint16 if len(self.tokenizer) < 2 ** 16 else np.uint32,
+            dtype=np.uint16 if len(self.tokenizer) < 2**16 else np.uint32,
         )
 
         term_dist = term_counts / term_counts.sum(axis=1)
@@ -214,7 +215,7 @@ class DataSelector(BaseEstimator, TransformerMixin):
                 vocab2id=self.tokenizer.vocab,
             )
             diversities[metric] = pd.Series(
-                (div_func(tokenized_doc) for tokenized_doc in tokenized_docs)
+                div_func(tokenized_doc) for tokenized_doc in tokenized_docs
             )
 
         return diversities

@@ -1,12 +1,11 @@
-import string
-
-import pytest
 import numpy as np
-from hypothesis import given, strategies as st
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
-from transformers_domain_adaptation.type import Corpus
 from transformers_domain_adaptation.data_selection.data_selector import DataSelector
+from transformers_domain_adaptation.type import Corpus
 
 
 @pytest.fixture(scope="session")
@@ -57,9 +56,7 @@ def corpus() -> Corpus:
 @given(keep=st.integers(max_value=0))
 def test_DataSelector_raise_error_with_zero_or_negative_select_int(keep, tokenizer):
     with pytest.raises(ValueError):
-        DataSelector(
-            keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"]
-        )
+        DataSelector(keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"])
 
 
 @given(
@@ -69,23 +66,17 @@ def test_DataSelector_raise_error_with_zero_or_negative_select_int(keep, tokeniz
 )
 def test_DataSelector_raise_error_with_invalid_select_float(keep, tokenizer):
     with pytest.raises(ValueError):
-        DataSelector(
-            keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"]
-        )
+        DataSelector(keep=keep, tokenizer=tokenizer, similarity_metrics=["euclidean"])
 
 
 def test_DataSelector_raise_error_with_invalid_similarity_metric(tokenizer):
     with pytest.raises(ValueError):
-        DataSelector(
-            keep=2, tokenizer=tokenizer, similarity_metrics=["invalid_metric"]
-        )
+        DataSelector(keep=2, tokenizer=tokenizer, similarity_metrics=["invalid_metric"])
 
 
 def test_DataSelector_raise_error_with_invalid_diversity_metric(tokenizer):
     with pytest.raises(ValueError):
-        DataSelector(
-            keep=2, tokenizer=tokenizer, diversity_metrics=["invalid_metric"]
-        )
+        DataSelector(keep=2, tokenizer=tokenizer, diversity_metrics=["invalid_metric"])
 
 
 def test_DataSelector_raise_error_when_both_similarity_and_diversity_metrics_are_not_specified(
@@ -109,7 +100,9 @@ def test_to_term_dist_raise_error_with_empty_str(data_selector: DataSelector, te
 #         lambda x: len(x.strip()) > 1
 #     )
 # )
-@pytest.mark.parametrize("text", ["a very short sentence", "knock knock tell me a joke"])
+@pytest.mark.parametrize(
+    "text", ["a very short sentence", "knock knock tell me a joke"]
+)
 def test_to_term_dist_return_a_valid_proba_dist(data_selector: DataSelector, text):
     term_dist = data_selector.to_term_dist(text)
     assert np.isclose(term_dist.sum(), 1.0)

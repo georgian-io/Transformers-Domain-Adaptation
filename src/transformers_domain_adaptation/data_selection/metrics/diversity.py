@@ -4,12 +4,10 @@ The functions here were adapted and vectorized
 from those in the authors' `repo <https://github.com/sebastianruder/learn-to-select-data/blob/master/features.py>`_.
 """
 from functools import partial
-from typing import Callable, Dict, Sequence
-from typing_extensions import Literal
+from typing import Callable, Dict, Literal, Sequence
 
 import numpy as np
 import scipy.stats
-
 
 from transformers_domain_adaptation.type import Token
 
