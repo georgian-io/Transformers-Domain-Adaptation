@@ -14,14 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-
+  run-ci:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: [3.7, 3.8]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v3
