@@ -1,0 +1,46 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      # Run `pyupgrade` before `pycln` so that it can clean up unused imports
+      - id: pyupgrade
+        name: Upgrade syntax based on Python version
+        language: python
+        entry: pyupgrade
+        args:
+          - "--py38-plus"
+      # Run `pycln` first so that Black doesn't need to autoformat again
+      # if imports are removed
+      - id: pycln
+        name: Remove unused Python imports
+        entry: pycln
+        language: python
+        files: "py$"
+        args: [--config=pyproject.toml]
+      - id: black
+        name: Format Python code
+        entry: black
+        language: python
+        files: "py$"
+      - id: isort
+        name: Sort Python imports
+        entry: isort
+        language: system
+      - id: pytest
+        name: Run test suite
+        stages: [push]
+        language: system
+        entry: make
+        args: [test]
+        pass_filenames: false
