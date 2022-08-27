@@ -43,4 +43,5 @@ repos:
         language: system
         entry: make
         args: [test]
+        types: [python]
         pass_filenames: false
