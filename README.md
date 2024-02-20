@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1 style="text-align:center">Transformers Domain Adaptation</h1>
+<h1 style="text-align:center">:no_entry: [DEPRECATED] Transformers Domain Adaptation</h1>
 <p align="center">
     <a href="https://transformers-domain-adaptation.readthedocs.io/en/latest/content/introduction.html">Documentation</a> •
     <a href="https://colab.research.google.com/github/georgianpartners/Transformers-Domain-Adaptation/blob/master/notebooks/GuideToTransformersDomainAdaptation.ipynb">Colab Guide</a>
